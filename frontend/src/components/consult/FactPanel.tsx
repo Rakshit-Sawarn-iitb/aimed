@@ -13,9 +13,10 @@ interface FactPanelProps {
   onFocusFact: (id: string) => void;
   onBulkApproveTier1: () => void;
   readOnly?: boolean;
+  audioUrl?: string;
 }
 
-export function FactPanel({ facts, onApprove, onReject, onEdit, onAudioPlay, onFocusFact, onBulkApproveTier1, readOnly = false }: FactPanelProps) {
+export function FactPanel({ facts, onApprove, onReject, onEdit, onAudioPlay, onFocusFact, onBulkApproveTier1, readOnly = false, audioUrl }: FactPanelProps) {
   // Group by tier, then by category. Tier 3 pinned at top.
   const grouped = useMemo(() => {
     const tiers: Record<RiskTier, Record<string, Fact[]>> = { 3: {}, 2: {}, 1: {} };
@@ -62,6 +63,7 @@ export function FactPanel({ facts, onApprove, onReject, onEdit, onAudioPlay, onF
                       onAudioPlay={onAudioPlay}
                       onFocus={onFocusFact}
                       readOnly={readOnly}
+                      audioUrl={audioUrl}
                     />
                   ))}
                 </div>

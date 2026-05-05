@@ -14,9 +14,10 @@ interface FactCardProps {
   onAudioPlay: (id: string) => void;
   onFocus?: (id: string) => void;
   readOnly?: boolean;
+  audioUrl?: string;
 }
 
-export function FactCard({ fact, onApprove, onReject, onEdit, onAudioPlay, onFocus, readOnly = false }: FactCardProps) {
+export function FactCard({ fact, onApprove, onReject, onEdit, onAudioPlay, onFocus, readOnly = false, audioUrl }: FactCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(fact.text);
   const [editPayload, setEditPayload] = useState(fact.structuredPayload || {});
@@ -34,9 +35,8 @@ export function FactCard({ fact, onApprove, onReject, onEdit, onAudioPlay, onFoc
     setIsEditing(false);
   }, [fact.id, editText, editPayload, fact.structuredPayload, onEdit]);
 
-  const utteranceStart = fact.sourceUtteranceIdxArr[0] ?? 0;
-  const audioStart = utteranceStart * 10; // simplified
-  const audioEnd = audioStart + 7;
+  const audioStart = fact.startSec ?? 0;
+  const audioEnd = fact.endSec ?? audioStart + 7;
 
   return (
     <div
@@ -121,6 +121,7 @@ export function FactCard({ fact, onApprove, onReject, onEdit, onAudioPlay, onFoc
               endSec={audioEnd}
               played={fact.audioPlayed}
               onPlay={() => onAudioPlay(fact.id)}
+              audioUrl={audioUrl}
             />
           </div>
 

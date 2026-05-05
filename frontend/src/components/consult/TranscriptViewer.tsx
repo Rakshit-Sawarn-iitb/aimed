@@ -6,10 +6,12 @@ interface TranscriptViewerProps {
   utterances: Utterance[];
   highlightedIdxs: number[];
   doctorName: string;
+  doctorSpeakerId?: '0' | '1';
   onSwapSpeakers: () => void;
 }
 
-export function TranscriptViewer({ utterances, highlightedIdxs, doctorName, onSwapSpeakers }: TranscriptViewerProps) {
+export function TranscriptViewer({ utterances, highlightedIdxs, doctorName, doctorSpeakerId = '0', onSwapSpeakers }: TranscriptViewerProps) {
+  const patientSpeakerId = doctorSpeakerId === '0' ? '1' : '0';
   const refs = useRef<Record<number, HTMLDivElement | null>>({});
 
   useEffect(() => {
@@ -26,8 +28,8 @@ export function TranscriptViewer({ utterances, highlightedIdxs, doctorName, onSw
         <p className="text-xs font-medium text-muted-foreground">Speaker assignment</p>
         <div className="flex items-center justify-between">
           <div className="text-xs space-y-1">
-            <p>Speaker 0 → <span className="font-medium">Doctor</span></p>
-            <p>Speaker 1 → <span className="font-medium">Patient</span></p>
+            <p>Speaker {doctorSpeakerId} → <span className="font-medium">Doctor</span></p>
+            <p>Speaker {patientSpeakerId} → <span className="font-medium">Patient</span></p>
           </div>
           <button
             className="text-xs text-primary font-medium hover:underline min-h-[44px] px-3"
