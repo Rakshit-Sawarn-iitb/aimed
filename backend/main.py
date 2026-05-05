@@ -6,6 +6,7 @@ import logging
 from api.auth import router as auth_router
 from api.reports import router as reports_router
 from api.consults import router as consults_router
+from api.facts import router as facts_router
 
 # Configure logging
 logging.basicConfig(
@@ -42,9 +43,10 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(reports_router)
 app.include_router(consults_router)
+app.include_router(facts_router)
 
 
 # Health check
 @app.get("/health", tags=["health"])
 async def health():
-    return {"status": "ok", "service": "aimed-backend"}
+    return {"status": "ok", "service": "aimed-backend"}

@@ -1,7 +1,8 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from core.auth import get_current_doctor_id
 from db.session import get_supabase_admin
-from models.consult import ReportOut, SOAPNoteOut
+from models.consult import ReportOut, ReportEditRequest
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -32,16 +33,57 @@ async def get_report(
     return _to_report_out(res.data)
 
 
+@router.patch("/{consult_id}", response_model=ReportOut)
+async def edit_report(
+    consult_id: str,
+    body: ReportEditRequest,
+    doctor_id: str = Depends(get_current_doctor_id),
+):
+    """
+    Doctor edits free-text SOAP fields directly.
+    Only allowed while consult is in_review.
+    """
+    supabase = get_supabase_admin()
+
+    # Ownership + status check via consult
+    consult = (
+        supabase.table("consults")
+        .select("doctor_id, status")
+        .eq("id", consult_id)
+        .single()
+        .execute()
+        .data
+    )
+    if not consult:
+        raise HTTPException(404, "Consult not found.")
+    if consult["doctor_id"] != doctor_id:
+        raise HTTPException(403, "Not your consult.")
+    if consult["status"] != "in_review":
+        raise HTTPException(409, "Report can only be edited while in review.")
+
+    # Only update fields the doctor actually sent
+    update = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not update:
+        raise HTTPException(400, "No fields to update.")
+
+    res = (
+        supabase.table("reports")
+        .update(update)
+        .eq("consult_id", consult_id)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(404, "Report not found.")
+    return _to_report_out(res.data[0])
+
+
 def _to_report_out(r: dict) -> ReportOut:
-    soap_raw = r.get("soap_note") or {}
     return ReportOut(
         id=r.get("id"),
-        soap_note=SOAPNoteOut(
-            subjective=soap_raw.get("subjective", ""),
-            objective=soap_raw.get("objective", ""),
-            assessment=soap_raw.get("assessment", ""),
-            plan=soap_raw.get("plan", ""),
-        ),
+        soap_subjective=r.get("soap_subjective") or "",
+        soap_objective=r.get("soap_objective") or "",
+        soap_assessment=r.get("soap_assessment") or "",
+        soap_plan=r.get("soap_plan") or "",
         drug_interactions=r.get("drug_interactions") or [],
         missing_fields=r.get("missing_fields") or [],
         followup_questions=r.get("followup_questions") or [],

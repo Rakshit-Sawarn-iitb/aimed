@@ -1,7 +1,77 @@
 import httpx
 
 OPENFDA_BASE = "https://api.fda.gov/drug"
-RXNORM_BASE = "https://rxnav.nlm.nih.gov/REST"
+RXNORM_BASE  = "https://rxnav.nlm.nih.gov/REST"
+
+# RxClass className (lowercase) → canonical class key used in risk-tier logic
+_RXCLASS_NORMALIZE: dict[str, str] = {
+    "penicillins":                                  "penicillin",
+    "penicillin antibiotics":                       "penicillin",
+    "sulfonamides":                                 "sulfa",
+    "sulfonamide antibiotics":                      "sulfa",
+    "nonsteroidal anti-inflammatory agents":        "nsaid",
+    "nonsteroidal anti-inflammatory drugs (nsaids)": "nsaid",
+    "non-steroidal anti-inflammatory drug":         "nsaid",
+    "cephalosporins":                               "cephalosporin",
+    "cephalosporin antibiotics":                    "cephalosporin",
+    "macrolides":                                   "macrolide",
+    "macrolide antibiotics":                        "macrolide",
+    "fluoroquinolones":                             "fluoroquinolone",
+    "quinolone antibiotics":                        "fluoroquinolone",
+    "fluoroquinolone antibiotics":                  "fluoroquinolone",
+}
+
+# Fallback: when allergen/drug IS the class name (e.g., "sulfa", "nsaid")
+_CLASS_ALIASES: dict[str, str] = {
+    "penicillin":     "penicillin",
+    "sulfa":          "sulfa",
+    "nsaid":          "nsaid",
+    "cephalosporin":  "cephalosporin",
+    "macrolide":      "macrolide",
+    "fluoroquinolone": "fluoroquinolone",
+}
+
+
+def get_drug_class(drug_name: str) -> str | None:
+    """
+    Resolve a drug name to its canonical pharmacological class via RxNorm RxClass API.
+    Returns one of: "penicillin", "sulfa", "nsaid", "cephalosporin",
+                    "macrolide", "fluoroquinolone"  — or None if not recognised.
+    Falls back to _CLASS_ALIASES for when the allergen is already a class name.
+    Silently returns None on any network/API error (fail-open is safer than false positives).
+    """
+    name_lower = drug_name.lower().strip()
+    if name_lower in _CLASS_ALIASES:
+        return _CLASS_ALIASES[name_lower]
+
+    rxcui = get_rxcui(drug_name)
+    if not rxcui:
+        return None
+
+    try:
+        res = httpx.get(
+            f"{RXNORM_BASE}/rxclass/class/byRxcui.json",
+            params={"rxcui": rxcui, "relaSource": "MEDRT"},
+            timeout=5.0,
+        )
+        items = (
+            res.json()
+               .get("rxclassDrugInfoList", {})
+               .get("rxclassDrugInfo", [])
+        )
+        for item in items:
+            cls_name = (
+                item.get("rxclassMinConceptItem", {})
+                    .get("className", "")
+                    .lower()
+            )
+            normalized = _RXCLASS_NORMALIZE.get(cls_name)
+            if normalized:
+                return normalized
+    except Exception:
+        pass
+
+    return None
 
 
 def get_rxcui(drug_name: str) -> str | None:

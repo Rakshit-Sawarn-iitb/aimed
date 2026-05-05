@@ -6,7 +6,8 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str
     JWT_SECRET: str
     SUPABASE_DATABASE_URI: str
-    GEMINI_API_KEY: str = ""
+    GEMINI_API_KEY_1: str = ""
+    GEMINI_API_KEY_2: str = ""
     SARVAM_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
 

@@ -42,6 +42,7 @@ from services.sarvam_client import (
 )
 from services.speaker_labeling import label_speakers, SpeakerMap
 from services.soap import structure_soap
+from services.facts_extractor import extract_facts, assign_risk_tiers
 
 logger = logging.getLogger(__name__)
 
@@ -107,15 +108,13 @@ def _persist_report(
     soap_result: dict,
 ) -> None:
     supabase.table("reports").upsert({
-        "consult_id": consult_id,
-        "patient_id": patient_id,
-        "doctor_id": doctor_id,
-        "soap_note": {
-            "subjective": soap_result.get("subjective", ""),
-            "objective":  soap_result.get("objective", ""),
-            "assessment": soap_result.get("assessment", ""),
-            "plan":       soap_result.get("plan", ""),
-        },
+        "consult_id":             consult_id,
+        "patient_id":             patient_id,
+        "doctor_id":              doctor_id,
+        "soap_subjective":        soap_result.get("subjective", ""),
+        "soap_objective":         soap_result.get("objective", ""),
+        "soap_assessment":        soap_result.get("assessment", ""),
+        "soap_plan":              soap_result.get("plan", ""),
         "drug_interactions":      soap_result.get("drug_interactions", []),
         "missing_fields":         soap_result.get("missing_fields", []),
         "followup_questions":     soap_result.get("followup_questions", []),
@@ -124,6 +123,33 @@ def _persist_report(
     }).execute()
     print(f"[PIPELINE] Report persisted for consult {consult_id[:8]}")
     logger.info("Persisted report for consult %s", consult_id)
+
+
+def _persist_facts(
+    supabase: Client,
+    consult_id: str,
+    patient_id: str,
+    facts: list[dict],
+) -> None:
+    rows = [
+        {
+            "consult_id":                f["consult_id"],
+            "patient_id":                f["patient_id"],
+            "category":                  f["category"],
+            "text":                      f["text"],
+            "structured_payload":        f["structured_payload"],
+            "evidence_quote":            f["evidence_quote"] or "—",
+            "source_utterance_idx_arr":  f["source_utterance_idx_arr"],
+            "risk_tier":                 f["risk_tier"],
+            "risk_reason":               f.get("risk_reason", ""),
+            "confidence":                f["confidence"],
+        }
+        for f in facts
+    ]
+    if rows:
+        supabase.table("facts").insert(rows).execute()
+    print(f"[PIPELINE] Persisted {len(rows)} facts for consult {consult_id[:8]}")
+    logger.info("Persisted %d facts for consult %s", len(rows), consult_id)
 
 
 # ---------------------------------------------------------------------------
@@ -268,10 +294,49 @@ async def run_transcription_pipeline(
         )
 
         # ----------------------------------------------------------------
-        # Step 8: SOAP extraction
+        # Step 8: Structured facts extraction + risk tier assignment
         # ----------------------------------------------------------------
-        print(f"[PIPELINE] Step 8: Running SOAP extraction (NER + Gemini + drug check)...")
-        logger.info("[%s] Step 8: Running SOAP extraction", consult_id)
+        print(f"[PIPELINE] Step 8: Extracting structured facts...")
+        logger.info("[%s] Step 8: Extracting structured facts", consult_id)
+
+        utterances_for_extraction = [
+            {
+                "idx":         e.idx,
+                "speaker_role": e.speaker_role,
+                "text":        e.text,
+                "start_sec":   e.start_sec,
+                "end_sec":     e.end_sec,
+            }
+            for e in entries
+        ]
+
+        facts: list[dict] = await loop.run_in_executor(
+            None, extract_facts, utterances_for_extraction
+        )
+        facts = await loop.run_in_executor(None, assign_risk_tiers, facts)
+
+        # Attach consult + patient ids for DB insertion
+        for f in facts:
+            f["consult_id"] = consult_id
+            f["patient_id"] = patient_id
+
+        tier_counts = {1: 0, 2: 0, 3: 0}
+        for f in facts:
+            tier_counts[f["risk_tier"]] += 1
+        print(f"[PIPELINE] Step 8 ✓ — {len(facts)} facts | "
+              f"T1={tier_counts[1]} T2={tier_counts[2]} T3={tier_counts[3]}")
+
+        # ----------------------------------------------------------------
+        # Step 8b: Persist facts
+        # ----------------------------------------------------------------
+        print(f"[PIPELINE] Step 8b: Persisting facts to DB...")
+        _persist_facts(supabase_admin, consult_id, patient_id, facts)
+
+        # ----------------------------------------------------------------
+        # Step 9: SOAP extraction
+        # ----------------------------------------------------------------
+        print(f"[PIPELINE] Step 9: Running SOAP extraction (NER + Gemini + drug check)...")
+        logger.info("[%s] Step 9: Running SOAP extraction", consult_id)
 
         transcript_for_soap = [
             {"speaker": e.speaker_role.upper(), "text": e.text}
@@ -283,16 +348,16 @@ async def run_transcription_pipeline(
             structure_soap,
             transcript_for_soap,
         )
-        print(f"[PIPELINE] Step 8 ✓ — SOAP keys: {list(soap_result.keys())}")
+        print(f"[PIPELINE] Step 9 ✓ — SOAP keys: {list(soap_result.keys())}")
         print(f"[PIPELINE]   subjective: {str(soap_result.get('subjective', ''))[:80]}")
         print(f"[PIPELINE]   assessment: {str(soap_result.get('assessment', ''))[:80]}")
         print(f"[PIPELINE]   drug_interactions: {len(soap_result.get('drug_interactions', []))} found")
 
         # ----------------------------------------------------------------
-        # Step 9: Persist report
+        # Step 10: Persist report
         # ----------------------------------------------------------------
-        print(f"[PIPELINE] Step 9: Persisting report to DB...")
-        logger.info("[%s] Step 9: Persisting report", consult_id)
+        print(f"[PIPELINE] Step 10: Persisting report to DB...")
+        logger.info("[%s] Step 10: Persisting report", consult_id)
         _persist_report(supabase_admin, consult_id, patient_id, doctor_id, soap_result)
 
         # ----------------------------------------------------------------

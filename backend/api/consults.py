@@ -9,6 +9,7 @@ REST endpoints for the consult lifecycle:
   GET    /consults/{id}/status      → lightweight poll (status + error only)
   PATCH  /consults/{id}/speaker     → doctor manually corrects speaker labels
                                       (re-runs SOAP in background if already extracted)
+  POST   /consults/{id}/approve     → doctor approves SOAP note, freezes record
 
 All routes require a valid Supabase JWT (doctor role).
 """
@@ -27,12 +28,12 @@ from models.consult import (
     ConsultCreateResponse,
     ConsultFinalizeRequest,
     ConsultOut,
+    ConsultListItem,
     ConsultStatusResponse,
     SpeakerLabelOverride,
     UtteranceOut,
     SpeakerMapOut,
     ReportOut,
-    SOAPNoteOut,
 )
 from services.soap import structure_soap
 from workers.transcription_worker import run_transcription_pipeline
@@ -44,6 +45,24 @@ router = APIRouter(prefix="/consults", tags=["consults"])
 RAW_AUDIO_BUCKET = "audio-raw"
 UPLOAD_URL_TTL   = 1800
 EXTRACTION_MODEL = "gemini-2.5-flash"
+
+
+# ---------------------------------------------------------------------------
+# GET /consults
+# ---------------------------------------------------------------------------
+
+@router.get("", response_model=list[ConsultListItem])
+async def list_consults(doctor_id: str = Depends(get_current_doctor_id)):
+    """Return all consults for the authenticated doctor, newest first."""
+    supabase = get_supabase_admin()
+    res = (
+        supabase.table("consults")
+        .select("id, patient_id, status, started_at, finalized_at, created_at, sarvam_error")
+        .eq("doctor_id", doctor_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return [ConsultListItem(**row) for row in (res.data or [])]
 
 
 # ---------------------------------------------------------------------------
@@ -284,15 +303,12 @@ async def get_consult(
         )
         if report_res.data:
             r = report_res.data
-            soap_raw = r.get("soap_note") or {}
             report_out = ReportOut(
                 id=r.get("id"),
-                soap_note=SOAPNoteOut(
-                    subjective=soap_raw.get("subjective", ""),
-                    objective=soap_raw.get("objective", ""),
-                    assessment=soap_raw.get("assessment", ""),
-                    plan=soap_raw.get("plan", ""),
-                ),
+                soap_subjective=r.get("soap_subjective") or "",
+                soap_objective=r.get("soap_objective") or "",
+                soap_assessment=r.get("soap_assessment") or "",
+                soap_plan=r.get("soap_plan") or "",
                 drug_interactions=r.get("drug_interactions") or [],
                 missing_fields=r.get("missing_fields") or [],
                 followup_questions=r.get("followup_questions") or [],
@@ -421,6 +437,73 @@ async def update_speaker_labels(
 
 
 # ---------------------------------------------------------------------------
+# POST /consults/{id}/approve
+# ---------------------------------------------------------------------------
+
+@router.post("/{consult_id}/approve", status_code=200)
+async def approve_consult(
+    consult_id: str,
+    doctor_id: str = Depends(get_current_doctor_id),
+):
+    """
+    Doctor reviews and approves the SOAP note.
+    Transitions status from 'in_review' → 'finalized' and stamps finalized_at.
+    A finalized consult is read-only — no further edits allowed.
+    """
+    supabase = get_supabase_admin()
+
+    result = (
+        supabase.table("consults")
+        .select("id, doctor_id, status")
+        .eq("id", consult_id)
+        .single()
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Consult not found.")
+    if result.data["doctor_id"] != doctor_id:
+        raise HTTPException(status_code=403, detail="Not your consult.")
+    if result.data["status"] != "in_review":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Only consults in 'in_review' can be approved. Current status: '{result.data['status']}'.",
+        )
+
+    # Block approval if any Tier-3 fact is still pending
+    tier3_pending = (
+        supabase.table("facts")
+        .select("id", count="exact")
+        .eq("consult_id", consult_id)
+        .eq("risk_tier", 3)
+        .eq("status", "pending")
+        .execute()
+    )
+    if (tier3_pending.count or 0) > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{tier3_pending.count} high-risk fact(s) still need review before approving.",
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    supabase.table("consults").update({
+        "status":       "finalized",
+        "finalized_at": now,
+    }).eq("id", consult_id).execute()
+
+    supabase.table("reports").update({
+        "approved_at": now,
+    }).eq("consult_id", consult_id).execute()
+
+    logger.info("Consult %s approved and finalized by doctor %s", consult_id, doctor_id)
+    return {
+        "consult_id":   consult_id,
+        "status":       "finalized",
+        "finalized_at": now,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Background helper: re-run SOAP after speaker correction
 # ---------------------------------------------------------------------------
 
@@ -445,15 +528,13 @@ async def _rerun_soap_extraction(
         soap_result: dict = await loop.run_in_executor(None, structure_soap, transcript)
 
         supabase.table("reports").upsert({
-            "consult_id": consult_id,
-            "patient_id": patient_id,
-            "doctor_id":  doctor_id,
-            "soap_note": {
-                "subjective": soap_result.get("subjective", ""),
-                "objective":  soap_result.get("objective", ""),
-                "assessment": soap_result.get("assessment", ""),
-                "plan":       soap_result.get("plan", ""),
-            },
+            "consult_id":             consult_id,
+            "patient_id":             patient_id,
+            "doctor_id":              doctor_id,
+            "soap_subjective":        soap_result.get("subjective", ""),
+            "soap_objective":         soap_result.get("objective", ""),
+            "soap_assessment":        soap_result.get("assessment", ""),
+            "soap_plan":              soap_result.get("plan", ""),
             "drug_interactions":      soap_result.get("drug_interactions", []),
             "missing_fields":         soap_result.get("missing_fields", []),
             "followup_questions":     soap_result.get("followup_questions", []),

@@ -80,21 +80,70 @@ class SpeakerMapOut(BaseModel):
     confidence: float
 
 
-class SOAPNoteOut(BaseModel):
-    subjective: str = ""
-    objective:  str = ""
-    assessment: str = ""
-    plan:       str = ""
+FactCategoryLiteral = Literal[
+    "chief_complaint", "hpi", "past_history", "current_medication",
+    "allergy", "vital", "exam_finding", "assessment_observation",
+    "plan", "follow_up", "social_history",
+]
+
+FactStatusLiteral = Literal["pending", "approved", "rejected", "edited"]
+
+
+class FactOut(BaseModel):
+    id:                      str
+    category:                FactCategoryLiteral
+    text:                    str
+    structured_payload:      dict = {}
+    evidence_quote:          str
+    source_utterance_idx_arr: list[int] = []
+    risk_tier:               int
+    risk_reason:             Optional[str] = None
+    confidence:              float
+    status:                  FactStatusLiteral
+    individually_reviewed:   bool
+    audio_played:            bool
+    reviewed_at:             Optional[datetime] = None
+    edit_history:            list = []
+    # Derived from source utterances — populated by the API
+    start_sec:               Optional[float] = None
+    end_sec:                 Optional[float] = None
 
 
 class ReportOut(BaseModel):
     id:                     Optional[str] = None
-    soap_note:              SOAPNoteOut = SOAPNoteOut()
+    soap_subjective:        str = ""
+    soap_objective:         str = ""
+    soap_assessment:        str = ""
+    soap_plan:              str = ""
     drug_interactions:      list = []
     missing_fields:         list[str] = []
     followup_questions:     list[str] = []
     plain_language_summary: Optional[str] = None
     extraction_model:       Optional[str] = None
+
+
+class ReportEditRequest(BaseModel):
+    soap_subjective: Optional[str] = None
+    soap_objective:  Optional[str] = None
+    soap_assessment: Optional[str] = None
+    soap_plan:       Optional[str] = None
+
+
+class FactReviewRequest(BaseModel):
+    action:       FactStatusLiteral
+    edited_value: Optional[dict] = None   # populated when action == "edited"
+    audio_played: Optional[bool] = None
+
+
+class ConsultListItem(BaseModel):
+    """Lightweight consult summary for the dashboard list."""
+    id: str
+    patient_id: str
+    status: ConsultStatusLiteral
+    started_at: Optional[datetime] = None
+    finalized_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    sarvam_error: Optional[str] = None
 
 
 class ConsultOut(BaseModel):
