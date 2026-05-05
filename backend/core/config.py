@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     GEMINI_API_KEY_2: str = ""
     SARVAM_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_WHATSAPP_FROM: str = ""
 
     class Config:
         env_file = ".env"
