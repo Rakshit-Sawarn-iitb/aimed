@@ -66,7 +66,7 @@ async def create_consult(
             supabase.table("consults")
             .select("id, status")
             .eq("doctor_id", doctor_id)
-            .eq("patient_id", body.patient_id)
+            .eq("patient_id", str(body.patient_id))
             .eq("status", "recording")
             .limit(1)
             .execute()
@@ -85,7 +85,7 @@ async def create_consult(
     consult_id = str(uuid.uuid4())
     supabase.table("consults").insert({
         "id": consult_id,
-        "patient_id": body.patient_id,
+        "patient_id": str(body.patient_id),
         "doctor_id": doctor_id,
         "status": "recording",
         "started_at": datetime.now(timezone.utc).isoformat(),

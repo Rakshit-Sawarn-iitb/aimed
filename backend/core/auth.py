@@ -1,7 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
-from core.config import settings
+from db.session import get_supabase
 
 bearer_scheme = HTTPBearer()
 
@@ -9,15 +8,19 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
 ) -> dict:
     token = credentials.credentials
+    supabase = get_supabase()
     try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET,
-            algorithms=["HS256"],
-            audience="authenticated"
-        )
-        return payload  # contains sub (user UUID), email, role, etc.
-    except JWTError as e:
+        user_response = supabase.auth.get_user(token)
+        if not user_response.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+        return {
+            "sub": user_response.user.id,
+            "email": user_response.user.email,
+        }
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {str(e)}"
