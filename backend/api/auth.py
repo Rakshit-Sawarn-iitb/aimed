@@ -9,23 +9,21 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # Schemas
 
 class LoginRequest(BaseModel):
-    email: str
+    phone: str
     password: str
 
 class DoctorSignupRequest(BaseModel):
-    email: EmailStr
+    phone: str
     password: str
     name: str
     clinic_name: str
     city: str
-    phone: str
 
 class PatientSignupRequest(BaseModel):
-    email: EmailStr
+    phone: str
     password: str
     name: str
     age: int
-    phone: str
     blood_group: str
 
 #  Doctor Auth 
@@ -36,7 +34,7 @@ async def doctor_signup(body: DoctorSignupRequest):
     admin = get_supabase_admin()
 
     try:
-        res = supabase.auth.sign_up({"email": body.email, "password": body.password})
+        res = supabase.auth.sign_up({"phone": body.phone, "password": body.password})
         if res.user is None:
             raise HTTPException(400, "Signup failed")
             
@@ -64,7 +62,7 @@ async def doctor_login(body: LoginRequest):
     supabase = get_supabase()
     admin = get_supabase_admin()
 
-    res = supabase.auth.sign_in_with_password({"email": body.email, "password": body.password})
+    res = supabase.auth.sign_in_with_password({"phone": body.phone, "password": body.password})
     if res.user is None:
         raise HTTPException(401, "Invalid credentials")
 
@@ -79,7 +77,6 @@ async def doctor_login(body: LoginRequest):
         "role": "doctor",
         "user": {
             "id": res.user.id,
-            "email": res.user.email,
             "name": doctor["name"],
             "clinic_name": doctor["clinic_name"],
             "city": doctor["city"],
@@ -95,7 +92,7 @@ async def patient_signup(body: PatientSignupRequest):
     admin = get_supabase_admin()
 
     try:
-        res = supabase.auth.sign_up({"email": body.email, "password": body.password})
+        res = supabase.auth.sign_up({"phone": body.phone, "password": body.password})
         if res.user is None:
             raise HTTPException(400, "Signup failed")
 
@@ -123,7 +120,7 @@ async def patient_login(body: LoginRequest):
     supabase = get_supabase()
     admin = get_supabase_admin()
 
-    res = supabase.auth.sign_in_with_password({"email": body.email, "password": body.password})
+    res = supabase.auth.sign_in_with_password({"phone": body.phone, "password": body.password})
     if res.user is None:
         raise HTTPException(401, "Invalid credentials")
 
@@ -138,7 +135,6 @@ async def patient_login(body: LoginRequest):
         "role": "patient",
         "user": {
             "id": res.user.id,
-            "email": res.user.email,
             "name": patient["name"],
             "age": patient["age"],
             "phone": patient["phone"],
