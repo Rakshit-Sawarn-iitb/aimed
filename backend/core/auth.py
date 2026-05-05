@@ -18,7 +18,7 @@ def get_current_user(
             )
         return {
             "sub": user_response.user.id,
-            "email": user_response.user.email,
+            "phone": user_response.user.phone,
         }
     except Exception as e:
         raise HTTPException(

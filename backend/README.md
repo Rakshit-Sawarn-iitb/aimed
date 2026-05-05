@@ -76,12 +76,11 @@ Register a new doctor account. Creates a Supabase Auth user and inserts a row in
 - **Request body:**
 ```json
 {
-  "email": "doctor@clinic.com",
+  "phone": "+919876543210",
   "password": "securepassword",
   "name": "Dr. Priya Verma",
   "clinic_name": "Verma Clinic",
-  "city": "Mumbai",
-  "phone": "+919876543210"
+  "city": "Mumbai"
 }
 ```
 - **Response `200`:**
@@ -99,7 +98,7 @@ Log in as a doctor. Verifies credentials with Supabase Auth and checks that a ma
 - **Request body:**
 ```json
 {
-  "email": "doctor@clinic.com",
+  "phone": "+919876543210",
   "password": "securepassword"
 }
 ```
@@ -111,7 +110,6 @@ Log in as a doctor. Verifies credentials with Supabase Auth and checks that a ma
   "role": "doctor",
   "user": {
     "id": "<uuid>",
-    "email": "doctor@clinic.com",
     "name": "Dr. Priya Verma",
     "clinic_name": "Verma Clinic",
     "city": "Mumbai",
@@ -130,11 +128,10 @@ Register a new patient account. Creates a Supabase Auth user and inserts a row i
 - **Request body:**
 ```json
 {
-  "email": "patient@example.com",
+  "phone": "+919876543211",
   "password": "securepassword",
   "name": "Asha Sharma",
   "age": 34,
-  "phone": "+919876543211",
   "blood_group": "O+"
 }
 ```
@@ -153,7 +150,7 @@ Log in as a patient.
 - **Request body:**
 ```json
 {
-  "email": "patient@example.com",
+  "phone": "+919876543211",
   "password": "securepassword"
 }
 ```
@@ -165,7 +162,6 @@ Log in as a patient.
   "role": "patient",
   "user": {
     "id": "<uuid>",
-    "email": "patient@example.com",
     "name": "Asha Sharma",
     "age": 34,
     "phone": "+919876543211",
