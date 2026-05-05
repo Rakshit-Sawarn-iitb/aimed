@@ -211,3 +211,41 @@ cython_debug/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# ────────────────────────────────────────────────────────────
+# AIMED — project-specific
+# ────────────────────────────────────────────────────────────
+
+# DB migration SQL files (applied once; sensitive schema details)
+backend/db/migrations/
+
+# Alembic auto-generated migration scripts
+backend/db/versions/
+alembic/versions/
+
+# Sarvam temporary output directories (created during transcription)
+sarvam_out_*/
+aimed_*.wav
+
+# Temp audio files produced by the pipeline
+*.wav
+!backend/tests/fixtures/*.wav
+
+# Python bytecode & caches (belt-and-suspenders, some already above)
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.ruff_cache/
+.mypy_cache/
+
+# IDE / editor caches
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS artefacts
+Thumbs.db
+.DS_Store

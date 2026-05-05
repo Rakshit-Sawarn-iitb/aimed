@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
+from gotrue.errors import AuthApiError
+from postgrest.exceptions import APIError
 from db.session import get_supabase, get_supabase_admin
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -33,21 +35,28 @@ async def doctor_signup(body: DoctorSignupRequest):
     supabase = get_supabase()
     admin = get_supabase_admin()
 
-    res = supabase.auth.sign_up({"email": body.email, "password": body.password})
-    if res.user is None:
-        raise HTTPException(400, "Signup failed")
+    try:
+        res = supabase.auth.sign_up({"email": body.email, "password": body.password})
+        if res.user is None:
+            raise HTTPException(400, "Signup failed")
+            
+        user_id = res.user.id
 
-    user_id = res.user.id
+        admin.table("doctors").insert({
+            "id": user_id,
+            "name": body.name,
+            "clinic_name": body.clinic_name,
+            "city": body.city,
+            "phone": body.phone,
+        }).execute()
 
-    admin.table("doctors").insert({
-        "id": user_id,
-        "name": body.name,
-        "clinic_name": body.clinic_name,
-        "city": body.city,
-        "phone": body.phone,
-    }).execute()
-
-    return {"message": "Doctor account created", "user_id": user_id}
+        return {"message": "Doctor account created", "user_id": user_id}
+    except AuthApiError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except APIError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/doctor/login")
@@ -85,21 +94,28 @@ async def patient_signup(body: PatientSignupRequest):
     supabase = get_supabase()
     admin = get_supabase_admin()
 
-    res = supabase.auth.sign_up({"email": body.email, "password": body.password})
-    if res.user is None:
-        raise HTTPException(400, "Signup failed")
+    try:
+        res = supabase.auth.sign_up({"email": body.email, "password": body.password})
+        if res.user is None:
+            raise HTTPException(400, "Signup failed")
 
-    user_id = res.user.id
+        user_id = res.user.id
 
-    admin.table("patients").insert({
-        "id": user_id,
-        "name": body.name,
-        "age": body.age,
-        "phone": body.phone,
-        "blood_group": body.blood_group,
-    }).execute()
+        admin.table("patients").insert({
+            "id": user_id,
+            "name": body.name,
+            "age": body.age,
+            "phone": body.phone,
+            "blood_group": body.blood_group,
+        }).execute()
 
-    return {"message": "Patient account created", "user_id": user_id}
+        return {"message": "Patient account created", "user_id": user_id}
+    except AuthApiError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except APIError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/patient/login")
