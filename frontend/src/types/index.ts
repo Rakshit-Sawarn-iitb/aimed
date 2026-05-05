@@ -25,12 +25,15 @@ export interface Fact {
   evidenceQuote: string;
   sourceUtteranceIdxArr: number[];
   riskTier: RiskTier;
+  riskReason?: string;
   confidence: number;
   status: FactStatus;
   individuallyReviewed: boolean;
   audioPlayed: boolean;
   reviewedAt?: string;
   editHistory: Array<{ text: string; editedAt: string }>;
+  startSec?: number;
+  endSec?: number;
 }
 
 export interface Utterance {
@@ -54,6 +57,16 @@ export interface Consult {
   utterances: Utterance[];
   startedAt: string;
   finalizedAt?: string;
+}
+
+export interface ConsultListItem {
+  id: string;
+  patient_id: string;
+  status: ConsultStatus;
+  started_at?: string;
+  finalized_at?: string;
+  created_at?: string;
+  sarvam_error?: string;
 }
 
 export interface PatientProfile {
