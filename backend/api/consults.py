@@ -5,13 +5,15 @@ REST endpoints for the consult lifecycle:
 
   POST   /consults                  → create consult row, return signed upload URL
   POST   /consults/{id}/finalize    → trigger transcription pipeline (BackgroundTask)
-  GET    /consults/{id}             → consult detail + utterances
+  GET    /consults/{id}             → consult detail + utterances + report
   GET    /consults/{id}/status      → lightweight poll (status + error only)
   PATCH  /consults/{id}/speaker     → doctor manually corrects speaker labels
+                                      (re-runs SOAP in background if already extracted)
 
 All routes require a valid Supabase JWT (doctor role).
 """
 
+import asyncio
 import uuid
 import logging
 from datetime import datetime, timezone
@@ -29,21 +31,23 @@ from models.consult import (
     SpeakerLabelOverride,
     UtteranceOut,
     SpeakerMapOut,
+    ReportOut,
+    SOAPNoteOut,
 )
+from services.soap import structure_soap
 from workers.transcription_worker import run_transcription_pipeline
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/consults", tags=["consults"])
 
-# Supabase Storage bucket where the frontend uploads raw audio
 RAW_AUDIO_BUCKET = "audio-raw"
-# How long the signed upload URL is valid (seconds)
-UPLOAD_URL_TTL = 1800  # 30 minutes
+UPLOAD_URL_TTL   = 1800
+EXTRACTION_MODEL = "gemini-2.5-flash"
 
 
 # ---------------------------------------------------------------------------
-# POST /consults  — create a new consult
+# POST /consults
 # ---------------------------------------------------------------------------
 
 @router.post("", response_model=ConsultCreateResponse, status_code=201)
@@ -60,7 +64,6 @@ async def create_consult(
     """
     supabase = get_supabase_admin()
 
-    # --- Idempotency check ---
     if body.idempotency_key:
         existing = (
             supabase.table("consults")
@@ -81,46 +84,43 @@ async def create_consult(
                 message="Existing recording session resumed.",
             )
 
-    # --- Create new consult row ---
     consult_id = str(uuid.uuid4())
     supabase.table("consults").insert({
-        "id": consult_id,
+        "id":         consult_id,
         "patient_id": str(body.patient_id),
-        "doctor_id": doctor_id,
-        "status": "recording",
+        "doctor_id":  doctor_id,
+        "status":     "recording",
         "started_at": datetime.now(timezone.utc).isoformat(),
     }).execute()
     logger.info("Created consult %s (doctor=%s, patient=%s)", consult_id, doctor_id, body.patient_id)
 
-    upload_url = _make_signed_upload_url(supabase, consult_id)
-    return ConsultCreateResponse(consult_id=consult_id, upload_url=upload_url)
+    return ConsultCreateResponse(
+        consult_id=consult_id,
+        upload_url=_make_signed_upload_url(supabase, consult_id),
+    )
 
 
 def _make_signed_upload_url(supabase, consult_id: str) -> str:
-    """Generate a signed upload URL for raw audio (30-min TTL)."""
     object_key = f"raw/{consult_id}"
     try:
         response = supabase.storage.from_(RAW_AUDIO_BUCKET).create_signed_upload_url(
             path=object_key,
         )
-        # supabase-py returns a dict with 'signedURL' or 'signed_url'
         url = (
             response.get("signedURL")
             or response.get("signed_url")
             or response.get("url", "")
         )
         if not url:
-            # Fallback: build a path URL (frontend uploads via service-role)
             url = f"{supabase.supabase_url}/storage/v1/object/{RAW_AUDIO_BUCKET}/{object_key}"
         return url
     except Exception as exc:
         logger.warning("Could not create signed upload URL: %s", exc)
-        # Return a placeholder — frontend can use the Supabase JS SDK directly
         return f"supabase-storage://{RAW_AUDIO_BUCKET}/raw/{consult_id}"
 
 
 # ---------------------------------------------------------------------------
-# POST /consults/{id}/finalize  — trigger transcription pipeline
+# POST /consults/{id}/finalize
 # ---------------------------------------------------------------------------
 
 @router.post("/{consult_id}/finalize", status_code=202)
@@ -134,12 +134,11 @@ async def finalize_consult(
     Mark the audio upload as complete and kick off the transcription pipeline
     as a background task.
 
-    Returns 202 Accepted immediately; the frontend should poll GET /consults/{id}/status
-    until status becomes 'in_review' (or 'failed').
+    Returns 202 Accepted immediately; the frontend should poll
+    GET /consults/{id}/status until status becomes 'in_review' (or 'failed').
     """
     supabase = get_supabase_admin()
 
-    # Verify this consult belongs to this doctor
     result = (
         supabase.table("consults")
         .select("id, status, doctor_id")
@@ -157,13 +156,11 @@ async def finalize_consult(
             detail=f"Consult is already in status '{result.data['status']}'. Cannot re-finalize.",
         )
 
-    # Update status to 'uploaded'
     supabase.table("consults").update({
-        "status": "uploaded",
+        "status":           "uploaded",
         "audio_object_key": body.audio_object_key,
     }).eq("id", consult_id).execute()
 
-    # Fire background pipeline
     background_tasks.add_task(
         run_transcription_pipeline,
         consult_id=consult_id,
@@ -172,19 +169,16 @@ async def finalize_consult(
         doctor_speaker_override=body.doctor_speaker_id,
     )
 
-    logger.info(
-        "Transcription pipeline queued for consult %s (key=%s)",
-        consult_id, body.audio_object_key,
-    )
+    logger.info("Transcription pipeline queued for consult %s", consult_id)
     return {
         "consult_id": consult_id,
-        "status": "uploaded",
-        "message": "Transcription pipeline started. Poll /consults/{id}/status for updates.",
+        "status":     "uploaded",
+        "message":    "Transcription pipeline started. Poll /consults/{id}/status for updates.",
     }
 
 
 # ---------------------------------------------------------------------------
-# GET /consults/{id}/status  — lightweight poll
+# GET /consults/{id}/status
 # ---------------------------------------------------------------------------
 
 @router.get("/{consult_id}/status", response_model=ConsultStatusResponse)
@@ -192,10 +186,7 @@ async def get_consult_status(
     consult_id: str,
     doctor_id: str = Depends(get_current_doctor_id),
 ):
-    """
-    Lightweight status-only endpoint for frontend polling.
-    Returns status + sarvam_error + utterance count.
-    """
+    """Lightweight status-only endpoint for frontend polling."""
     supabase = get_supabase_admin()
 
     result = (
@@ -210,25 +201,22 @@ async def get_consult_status(
     if result.data["doctor_id"] != doctor_id:
         raise HTTPException(status_code=403, detail="Not your consult.")
 
-    # Count utterances
     utterance_count_res = (
         supabase.table("utterances")
         .select("id", count="exact")
         .eq("consult_id", consult_id)
         .execute()
     )
-    utterance_count = utterance_count_res.count or 0
-    print("hi this is sarvvam error",result.data.get("sarvam_error"))
     return ConsultStatusResponse(
         consult_id=consult_id,
         status=result.data["status"],
         sarvam_error=result.data.get("sarvam_error"),
-        utterance_count=utterance_count,
+        utterance_count=utterance_count_res.count or 0,
     )
 
 
 # ---------------------------------------------------------------------------
-# GET /consults/{id}  — full consult detail with utterances
+# GET /consults/{id}
 # ---------------------------------------------------------------------------
 
 @router.get("/{consult_id}", response_model=ConsultOut)
@@ -236,12 +224,9 @@ async def get_consult(
     consult_id: str,
     doctor_id: str = Depends(get_current_doctor_id),
 ):
-    """
-    Return full consult detail including diarized utterances (once available).
-    """
+    """Return full consult detail including diarized utterances and SOAP report."""
     supabase = get_supabase_admin()
 
-    # Fetch consult
     result = (
         supabase.table("consults")
         .select("*")
@@ -255,7 +240,7 @@ async def get_consult(
     if consult["doctor_id"] != doctor_id:
         raise HTTPException(status_code=403, detail="Not your consult.")
 
-    # Fetch utterances
+    # Utterances
     utt_res = (
         supabase.table("utterances")
         .select("*")
@@ -275,7 +260,7 @@ async def get_consult(
         for u in (utt_res.data or [])
     ]
 
-    # Extract speaker_map from transcript_json if available
+    # Speaker map from transcript_json
     speaker_map_out = None
     if consult.get("transcript_json"):
         sm = consult["transcript_json"].get("speaker_map")
@@ -285,6 +270,34 @@ async def get_consult(
                 patient_speaker_id=sm.get("patient_speaker_id", "1"),
                 method=sm.get("method", "unknown"),
                 confidence=sm.get("confidence", 0.0),
+            )
+
+    # Report — available once pipeline reaches in_review
+    report_out = None
+    if consult["status"] in ("in_review", "finalized"):
+        report_res = (
+            supabase.table("reports")
+            .select("*")
+            .eq("consult_id", consult_id)
+            .single()
+            .execute()
+        )
+        if report_res.data:
+            r = report_res.data
+            soap_raw = r.get("soap_note") or {}
+            report_out = ReportOut(
+                id=r.get("id"),
+                soap_note=SOAPNoteOut(
+                    subjective=soap_raw.get("subjective", ""),
+                    objective=soap_raw.get("objective", ""),
+                    assessment=soap_raw.get("assessment", ""),
+                    plan=soap_raw.get("plan", ""),
+                ),
+                drug_interactions=r.get("drug_interactions") or [],
+                missing_fields=r.get("missing_fields") or [],
+                followup_questions=r.get("followup_questions") or [],
+                plain_language_summary=r.get("plain_language_summary"),
+                extraction_model=r.get("extraction_model"),
             )
 
     return ConsultOut(
@@ -302,11 +315,12 @@ async def get_consult(
         created_at=consult.get("created_at"),
         utterances=utterances,
         speaker_map=speaker_map_out,
+        report=report_out,
     )
 
 
 # ---------------------------------------------------------------------------
-# PATCH /consults/{id}/speaker  — doctor manually corrects speaker labels
+# PATCH /consults/{id}/speaker
 # ---------------------------------------------------------------------------
 
 @router.patch("/{consult_id}/speaker", status_code=200)
@@ -317,18 +331,18 @@ async def update_speaker_labels(
     doctor_id: str = Depends(get_current_doctor_id),
 ):
     """
-    Doctor can flip the speaker mapping from the review UI toggle.
-    Re-labels all utterances for this consult and updates transcript_json.
+    Doctor corrects speaker labels from the review UI.
+    Re-labels all utterances and queues a SOAP re-extraction in the background
+    because the existing SOAP note was generated with wrong speaker roles.
     """
-    from services.speaker_labeling import label_speakers, SpeakerMap, _apply_roles
+    from services.speaker_labeling import label_speakers, SpeakerMap
     from services.sarvam_client import UtteranceEntry
 
     supabase = get_supabase_admin()
 
-    # Verify ownership
     result = (
         supabase.table("consults")
-        .select("id, doctor_id, status, transcript_json")
+        .select("id, doctor_id, patient_id, status, transcript_json")
         .eq("id", consult_id)
         .single()
         .execute()
@@ -340,10 +354,9 @@ async def update_speaker_labels(
     if result.data["status"] not in ("in_review", "extracting"):
         raise HTTPException(
             status_code=409,
-            detail="Speaker labels can only be changed during review."
+            detail="Speaker labels can only be changed during review.",
         )
 
-    # Fetch current utterances
     utt_res = (
         supabase.table("utterances")
         .select("*")
@@ -363,16 +376,15 @@ async def update_speaker_labels(
         for u in (utt_res.data or [])
     ]
 
-    # Re-label with override
     speaker_map = label_speakers(entries, override_doctor_speaker_id=body.doctor_speaker_id)
 
-    # Update each utterance row
+    # Update utterance rows with corrected roles
     for entry in entries:
         supabase.table("utterances").update({
             "speaker_role": entry.speaker_role,
         }).eq("consult_id", consult_id).eq("idx", entry.idx).execute()
 
-    # Update transcript_json.speaker_map
+    # Update transcript_json speaker_map and entries
     transcript_json = result.data.get("transcript_json") or {}
     transcript_json["speaker_map"] = {
         "doctor_speaker_id": speaker_map.doctor_speaker_id,
@@ -380,19 +392,85 @@ async def update_speaker_labels(
         "method": speaker_map.method,
         "confidence": speaker_map.confidence,
     }
-    # Also update the entries in transcript_json
     if "entries" in transcript_json:
         role_map = {e.idx: e.speaker_role for e in entries}
-        for entry in transcript_json["entries"]:
-            entry["speaker_role"] = role_map.get(entry.get("idx", -1), "unknown")
+        for e in transcript_json["entries"]:
+            e["speaker_role"] = role_map.get(e.get("idx", -1), "unknown")
 
     supabase.table("consults").update({
         "transcript_json": transcript_json,
     }).eq("id", consult_id).execute()
 
+    # Re-run SOAP — old note used wrong speaker attribution
+    background_tasks.add_task(
+        _rerun_soap_extraction,
+        consult_id=consult_id,
+        patient_id=result.data["patient_id"],
+        doctor_id=doctor_id,
+        entries=entries,
+        supabase=supabase,
+    )
+
     return {
-        "consult_id": consult_id,
-        "doctor_speaker_id": speaker_map.doctor_speaker_id,
+        "consult_id":         consult_id,
+        "doctor_speaker_id":  speaker_map.doctor_speaker_id,
         "patient_speaker_id": speaker_map.patient_speaker_id,
         "updated_utterances": len(entries),
+        "message":            "Speaker labels updated. SOAP note is being regenerated.",
     }
+
+
+# ---------------------------------------------------------------------------
+# Background helper: re-run SOAP after speaker correction
+# ---------------------------------------------------------------------------
+
+async def _rerun_soap_extraction(
+    consult_id: str,
+    patient_id: str,
+    doctor_id: str,
+    entries: list,
+    supabase,
+) -> None:
+    """Re-generate the SOAP note after the doctor corrects speaker labels."""
+    try:
+        supabase.table("consults").update({"status": "extracting"}).eq("id", consult_id).execute()
+        logger.info("[%s] Re-running SOAP after speaker correction", consult_id)
+
+        transcript = [
+            {"speaker": e.speaker_role.upper(), "text": e.text}
+            for e in entries
+        ]
+
+        loop = asyncio.get_event_loop()
+        soap_result: dict = await loop.run_in_executor(None, structure_soap, transcript)
+
+        supabase.table("reports").upsert({
+            "consult_id": consult_id,
+            "patient_id": patient_id,
+            "doctor_id":  doctor_id,
+            "soap_note": {
+                "subjective": soap_result.get("subjective", ""),
+                "objective":  soap_result.get("objective", ""),
+                "assessment": soap_result.get("assessment", ""),
+                "plan":       soap_result.get("plan", ""),
+            },
+            "drug_interactions":      soap_result.get("drug_interactions", []),
+            "missing_fields":         soap_result.get("missing_fields", []),
+            "followup_questions":     soap_result.get("followup_questions", []),
+            "plain_language_summary": soap_result.get("plain_language_summary", ""),
+            "extraction_model":       EXTRACTION_MODEL,
+        }).execute()
+
+        supabase.table("consults").update({
+            "status":           "in_review",
+            "extraction_model": EXTRACTION_MODEL,
+        }).eq("id", consult_id).execute()
+
+        logger.info("[%s] SOAP re-extraction complete ✓", consult_id)
+
+    except Exception as exc:
+        logger.exception("[%s] SOAP re-extraction failed after speaker fix", consult_id)
+        supabase.table("consults").update({
+            "status":       "failed",
+            "sarvam_error": f"SOAP re-extraction failed: {exc}"[:2000],
+        }).eq("id", consult_id).execute()

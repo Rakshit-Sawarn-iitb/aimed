@@ -80,6 +80,23 @@ class SpeakerMapOut(BaseModel):
     confidence: float
 
 
+class SOAPNoteOut(BaseModel):
+    subjective: str = ""
+    objective:  str = ""
+    assessment: str = ""
+    plan:       str = ""
+
+
+class ReportOut(BaseModel):
+    id:                     Optional[str] = None
+    soap_note:              SOAPNoteOut = SOAPNoteOut()
+    drug_interactions:      list = []
+    missing_fields:         list[str] = []
+    followup_questions:     list[str] = []
+    plain_language_summary: Optional[str] = None
+    extraction_model:       Optional[str] = None
+
+
 class ConsultOut(BaseModel):
     """Full consult detail response."""
     id: str
@@ -97,6 +114,8 @@ class ConsultOut(BaseModel):
     # Populated when status >= 'extracting'
     utterances: list[UtteranceOut] = []
     speaker_map: Optional[SpeakerMapOut] = None
+    # Populated when status >= 'in_review'
+    report: Optional[ReportOut] = None
 
     model_config = {"from_attributes": True}
 
