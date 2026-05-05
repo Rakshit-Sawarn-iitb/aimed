@@ -1,73 +1,181 @@
-import { useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import confetti from 'canvas-confetti';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { Recorder } from '@/components/consult/Recorder';
 import { ProcessingStepper } from '@/components/consult/ProcessingStepper';
 import { TranscriptViewer } from '@/components/consult/TranscriptViewer';
-import { FactPanel } from '@/components/consult/FactPanel';
-import { ReviewBottomBar } from '@/components/consult/ReviewBottomBar';
-import { Button } from '@/components/ui/button';
-import { useConsult, type ConsultState } from '@/hooks/useConsult';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { useFactReview } from '@/hooks/useFactReview';
-import { mockConsult, mockPatient, mockDoctor } from '@/lib/mockData';
+import { api, ApiError } from '@/lib/api';
+
+type Phase = 'idle' | 'recording' | 'uploading' | 'processing' | 'review' | 'failed';
+
+interface CreateResponse {
+  consult_id: string;
+  upload_url: string;
+}
+
+interface StatusResponse {
+  consult_id: string;
+  status: string;
+  sarvam_error: string | null;
+  utterance_count: number;
+}
+
+interface ConsultDetail {
+  id: string;
+  status: string;
+  utterances: Array<{
+    idx: number;
+    speaker_id: string;
+    speaker_role: 'doctor' | 'patient' | 'unknown';
+    text: string;
+    start_sec: number;
+    end_sec: number;
+  }>;
+  speaker_map?: { doctor_speaker_id: string; patient_speaker_id: string };
+}
+
+const STEP_LABEL: Record<string, number> = {
+  uploaded: 0,
+  transcribing: 1,
+  extracting: 2,
+  in_review: 2,
+};
 
 export default function NewConsult() {
   const navigate = useNavigate();
-  const { state, startRecording: startConsultRecording, stopRecording: stopConsultRecording, startProcessing, advanceProcessing, startReview, freeze } = useConsult();
+  const { consultId: routeConsultId } = useParams();
+  const [searchParams] = useSearchParams();
+  const queryPatientId = searchParams.get('patientId') ?? '';
+
   const recorder = useAudioRecorder();
-  const factReview = useFactReview(mockConsult.facts);
-  const [focusedFactId, setFocusedFactId] = useState<string | null>(null);
-  const [swapped, setSwapped] = useState(false);
 
-  const utterances = useMemo(() => {
-    if (!swapped) return mockConsult.utterances;
-    return mockConsult.utterances.map(u => ({
-      ...u,
-      speakerRole: u.speakerRole === 'doctor' ? 'patient' as const : u.speakerRole === 'patient' ? 'doctor' as const : u.speakerRole,
-    }));
-  }, [swapped]);
+  const [phase, setPhase] = useState<Phase>('idle');
+  const [patientId, setPatientId] = useState(queryPatientId);
+  const [consultId, setConsultId] = useState<string | null>(routeConsultId ?? null);
+  const [statusText, setStatusText] = useState<string>('');
+  const [stepIdx, setStepIdx] = useState(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ConsultDetail | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const highlightedIdxs = useMemo(() => {
-    if (!focusedFactId) return [];
-    const fact = factReview.facts.find(f => f.id === focusedFactId);
-    return fact?.sourceUtteranceIdxArr || [];
-  }, [focusedFactId, factReview.facts]);
+  // Stop polling on unmount
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  const startPolling = useCallback((id: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const s = await api.get<StatusResponse>(`/consults/${id}/status`);
+        setStatusText(s.status);
+        if (STEP_LABEL[s.status] !== undefined) setStepIdx(STEP_LABEL[s.status]);
+        if (s.status === 'in_review' || s.status === 'finalized') {
+          if (pollRef.current) clearInterval(pollRef.current);
+          const d = await api.get<ConsultDetail>(`/consults/${id}`);
+          setDetail(d);
+          setPhase('review');
+        } else if (s.status === 'failed') {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setErrorMsg(s.sarvam_error || 'Transcription failed');
+          setPhase('failed');
+        }
+      } catch (err) {
+        if (pollRef.current) clearInterval(pollRef.current);
+        setErrorMsg(err instanceof ApiError ? err.message : 'Polling failed');
+        setPhase('failed');
+      }
+    }, 3000);
+  }, []);
 
   const handleStartRecording = useCallback(async () => {
-    startConsultRecording();
-    await recorder.startRecording();
-  }, [startConsultRecording, recorder]);
-
-  const handleStopRecording = useCallback(() => {
-    recorder.stopRecording();
-    stopConsultRecording();
-    // Simulate upload + processing
-    startProcessing('c1');
-    setTimeout(() => advanceProcessing(1), 1500);
-    setTimeout(() => advanceProcessing(2), 3000);
-    setTimeout(() => startReview(), 4500);
-  }, [recorder, stopConsultRecording, startProcessing, advanceProcessing, startReview]);
-
-  const handleFreeze = useCallback(() => {
-    if (!factReview.allReviewed) {
-      toast.error(`${factReview.pendingCount} facts still need review`);
+    if (!patientId.trim()) {
+      toast.error('Enter a patient id to start');
       return;
     }
-    freeze();
-    confetti({ particleCount: 80, spread: 60, origin: { y: 0.7 } });
-  }, [factReview, freeze]);
+    setErrorMsg(null);
+    setPhase('recording');
+    try {
+      await recorder.startRecording();
+    } catch (err) {
+      setPhase('idle');
+      toast.error('Microphone access denied');
+    }
+  }, [patientId, recorder]);
 
-  // Idle or Recording
-  if (state === 'idle' || state === 'recording') {
+  const handleStopRecording = useCallback(async () => {
+    setPhase('uploading');
+    setStatusText('uploading');
+    try {
+      // Stop the recorder and wait for the finalized blob (resolves from MediaRecorder.onstop)
+      const blobPromise = recorder.stopAndGetBlob();
+
+      // Run the consult creation in parallel with the recorder finalizing
+      const created = await api.post<CreateResponse>('/consults', { patient_id: patientId.trim() });
+      setConsultId(created.consult_id);
+
+      const blob = await blobPromise;
+
+      const putRes = await fetch(created.upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': blob.type || 'audio/webm' },
+        body: blob,
+      });
+      if (!putRes.ok) throw new Error(`Upload failed: ${putRes.status}`);
+
+      await api.post(`/consults/${created.consult_id}/finalize`, {
+        audio_object_key: `raw/${created.consult_id}`,
+      });
+
+      setPhase('processing');
+      setStepIdx(0);
+      startPolling(created.consult_id);
+    } catch (err) {
+      setErrorMsg(err instanceof ApiError ? err.message : (err as Error).message);
+      setPhase('failed');
+    }
+  }, [recorder, patientId, startPolling]);
+
+  // Idle: ask for patient id, then show recorder
+  if (phase === 'idle') {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-6 max-w-md mx-auto">
+        <div className="w-full bg-card border border-border rounded-xl p-6 space-y-4">
+          <div>
+            <h1 className="text-lg font-medium">New consult</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Patient roster API isn't built yet — paste a patient user id (UUID) to record against.
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-medium">Patient id</label>
+            <input
+              className="mt-1.5 w-full h-11 px-3 rounded-md border border-input bg-background text-sm font-mono"
+              placeholder="00000000-0000-0000-0000-000000000000"
+              value={patientId}
+              onChange={e => setPatientId(e.target.value)}
+            />
+          </div>
+          <Button
+            className="w-full min-h-[44px]"
+            disabled={!patientId.trim()}
+            onClick={handleStartRecording}
+          >
+            Open recorder
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'recording') {
     return (
       <div className="flex-1 flex flex-col">
         <Recorder
-          isRecording={state === 'recording'}
+          isRecording
           isPaused={recorder.isPaused}
           durationSec={recorder.durationSec}
-          patientName={`${mockPatient.fullName}, ${new Date().getFullYear() - new Date(mockPatient.dob!).getFullYear()}`}
+          patientName={`Patient ${patientId.slice(0, 8)}…`}
           onStart={handleStartRecording}
           onStop={handleStopRecording}
           onPause={recorder.pauseRecording}
@@ -77,94 +185,62 @@ export default function NewConsult() {
     );
   }
 
-  // Uploading / Processing
-  if (state === 'uploading' || state === 'processing') {
+  if (phase === 'uploading' || phase === 'processing') {
     return (
       <div className="flex-1 flex flex-col">
-        <ProcessingStepper currentStep={state === 'uploading' ? 0 : Math.min(2, mockConsult.facts.length > 0 ? 2 : 1)} />
+        <ProcessingStepper currentStep={stepIdx} />
+        <p className="text-center text-xs text-muted-foreground mt-4">
+          Status: {statusText || 'starting…'}
+          {consultId && <span className="ml-2 font-mono">({consultId.slice(0, 8)}…)</span>}
+        </p>
       </div>
     );
   }
 
-  // Frozen
-  if (state === 'frozen') {
-    const highRisk = factReview.facts.filter(f => f.riskTier === 3);
-    const audioPlayedCount = highRisk.filter(f => f.audioPlayed).length;
-    const editedCount = factReview.facts.filter(f => f.status === 'edited').length;
-
+  if (phase === 'failed') {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
-        <div className="bg-card border border-border rounded-xl p-8 max-w-md text-center space-y-4">
-          <div className="h-12 w-12 rounded-full bg-success/10 flex items-center justify-center mx-auto">
-            <span className="text-success text-xl">✓</span>
-          </div>
-          <h2 className="text-lg font-medium">Record finalized and sent to {mockPatient.fullName}</h2>
-          <div className="text-sm text-muted-foreground space-y-1">
-            <p>You reviewed {factReview.facts.length} facts individually.</p>
-            <p>Audio played for {audioPlayedCount} of {highRisk.length} high-risk items.</p>
-            {editedCount > 0 && <p>{editedCount} fact{editedCount > 1 ? 's' : ''} edited.</p>}
-          </div>
-          <div className="flex gap-3 justify-center pt-2">
-            <Button variant="outline" className="min-h-[44px]" onClick={() => navigate('/doctor')}>View full record</Button>
-            <Button className="min-h-[44px]">Share with another doctor →</Button>
-          </div>
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="bg-card border border-border rounded-xl p-6 max-w-md text-center space-y-3">
+          <h2 className="text-lg font-medium">Something went wrong</h2>
+          <p className="text-sm text-muted-foreground">{errorMsg ?? 'Unknown error'}</p>
+          <Button onClick={() => { setPhase('idle'); setErrorMsg(null); }}>Try again</Button>
         </div>
       </div>
     );
   }
 
-  // Review state (default)
+  // Review — transcript only for now; fact extraction + verification UI is not wired yet
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Desktop: split layout */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        {/* Transcript (left) */}
-        <div className="hidden md:flex md:w-[40%] border-r border-border flex-col overflow-hidden">
-          <TranscriptViewer
-            utterances={utterances}
-            highlightedIdxs={highlightedIdxs}
-            doctorName={mockDoctor.fullName}
-            onSwapSpeakers={() => setSwapped(s => !s)}
-          />
+      <div className="border-b border-border px-4 py-3 flex items-center justify-between">
+        <div>
+          <h1 className="text-base font-medium">Transcript ready</h1>
+          <p className="text-xs text-muted-foreground">
+            Fact extraction and review aren't wired to the backend yet.
+          </p>
         </div>
-
-        {/* Mobile: transcript accordion */}
-        <div className="md:hidden border-b border-border">
-          <details className="group">
-            <summary className="px-4 py-3 text-sm font-medium cursor-pointer text-primary min-h-[44px] flex items-center">
-              View transcript
-            </summary>
-            <div className="max-h-64 overflow-y-auto">
-              <TranscriptViewer
-                utterances={utterances}
-                highlightedIdxs={highlightedIdxs}
-                doctorName={mockDoctor.fullName}
-                onSwapSpeakers={() => setSwapped(s => !s)}
-              />
-            </div>
-          </details>
-        </div>
-
-        {/* Facts (right) */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <FactPanel
-            facts={factReview.facts}
-            onApprove={factReview.approveFact}
-            onReject={factReview.rejectFact}
-            onEdit={factReview.editFact}
-            onAudioPlay={factReview.markAudioPlayed}
-            onFocusFact={setFocusedFactId}
-            onBulkApproveTier1={factReview.bulkApproveTier1}
-          />
-        </div>
+        <Button variant="outline" onClick={() => navigate('/doctor')}>Back</Button>
       </div>
 
-      <ReviewBottomBar
-        reviewedCount={factReview.reviewedCount}
-        totalCount={factReview.facts.length}
-        allReviewed={factReview.allReviewed}
-        onFreeze={handleFreeze}
-      />
+      <div className="flex-1 overflow-hidden">
+        {detail && (
+          <TranscriptViewer
+            utterances={detail.utterances.map(u => ({
+              id: `${detail.id}-${u.idx}`,
+              consultId: detail.id,
+              idx: u.idx,
+              speakerId: u.speaker_id,
+              speakerRole: u.speaker_role,
+              startSec: u.start_sec,
+              endSec: u.end_sec,
+              text: u.text,
+            }))}
+            highlightedIdxs={[]}
+            doctorName="You"
+            onSwapSpeakers={() => toast.message('Speaker swap will call PATCH /consults/:id/speaker — not wired yet')}
+          />
+        )}
+      </div>
     </div>
   );
 }
