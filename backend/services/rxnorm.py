@@ -16,7 +16,7 @@ def get_rxcui(drug_name: str) -> str | None:
         rxcui = data.get("idGroup", {}).get("rxnormId", [])
         return rxcui[0] if rxcui else None
     except Exception as e:
-        print(f"[RxNorm] ERROR looking up '{drug_name}': {e}")
+        #print(f"[RxNorm] ERROR looking up '{drug_name}': {e}")
         return None
 
 
@@ -29,7 +29,7 @@ def get_fda_interactions(drug_name: str) -> list[str]:
         response = httpx.get(
             f"{OPENFDA_BASE}/label.json",
             params={
-                "search": f"openfda.generic_name:{drug_name}",
+                "search": f'openfda.generic_name:"{drug_name}"',
                 "limit": 1
             },
             timeout=8.0
@@ -48,7 +48,7 @@ def get_fda_interactions(drug_name: str) -> list[str]:
         return interactions
 
     except Exception as e:
-        print(f"[FDA] ERROR fetching label for '{drug_name}': {e}")
+        #print(f"[FDA] ERROR fetching label for '{drug_name}': {e}")
         return []
 
 
@@ -57,17 +57,25 @@ def check_interactions(drug_names: list[str]) -> list[dict]:
     For each drug, fetch its FDA label interaction warnings.
     Filter to only show warnings that mention another drug in our list.
     """
-    if len(drug_names) < 2:
+    verified_drugs = []
+    for drug in drug_names:
+        rxcui = get_rxcui(drug)
+        if rxcui:
+            verified_drugs.append(drug)
+        else:
+            print(f"[RxNorm] No RxCUI for '{drug}' — skipping (likely supplement/herbal)")
+
+    if len(verified_drugs) < 2:
         return []
 
-    print(f"[RxNorm] Checking interactions for: {drug_names}")
+    #print(f"[RxNorm] Checking interactions for: {verified_drugs}")
 
     interactions = []
 
-    for drug in drug_names:
-        other_drugs = [d for d in drug_names if d.lower() != drug.lower()]
+    for drug in verified_drugs:
+        other_drugs = [d for d in verified_drugs if d.lower() != drug.lower()]
         
-        print(f"[FDA] Fetching interaction label for: {drug}")
+        #print(f"[FDA] Fetching interaction label for: {drug}")
         warnings = get_fda_interactions(drug)
 
         for warning_text in warnings:
@@ -87,7 +95,7 @@ def check_interactions(drug_names: list[str]) -> list[dict]:
                         for i in interactions
                     )
                     if not already_added:
-                        print(f"[FDA] ✓ Interaction found: {drug} ↔ {other}")
+                        #print(f"[FDA] ✓ Interaction found: {drug} ↔ {other}")
                         interactions.append(interaction)
 
     return interactions
