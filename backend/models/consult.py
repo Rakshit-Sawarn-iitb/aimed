@@ -32,8 +32,8 @@ SpeakerRoleLiteral = Literal["doctor", "patient", "unknown"]
 
 class ConsultCreateRequest(BaseModel):
     """Body for POST /consults — create a new consult session."""
-    patient_id: str = Field(..., description="UUID of the patient (from patients table)")
-    idempotency_key: Optional[str] = Field(
+    patient_id: UUID = Field(..., description="UUID of the patient (from patients table)")
+    idempotency_key: Optional[UUID] = Field(
         None,
         description="Client-generated UUID to prevent duplicate consult rows on retry"
     )
