@@ -218,7 +218,7 @@ async def get_consult_status(
         .execute()
     )
     utterance_count = utterance_count_res.count or 0
-
+    print("hi this is sarvvam error",result.data.get("sarvam_error"))
     return ConsultStatusResponse(
         consult_id=consult_id,
         status=result.data["status"],

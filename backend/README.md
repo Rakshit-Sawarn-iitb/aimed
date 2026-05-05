@@ -8,6 +8,13 @@ FastAPI backend for the AIMED medical consultation recorder. Handles authenticat
 
 ---
 
+## System Requirements
+
+This project requires **FFmpeg** to be installed on your system to process audio files before sending them to Sarvam AI.
+- **Windows:** Run `winget install FFmpeg` (you must restart your IDE/terminal after).
+- **Mac:** Run `brew install ffmpeg`
+- **Linux:** Run `sudo apt install ffmpeg`
+
 ## Quick Start
 
 ```bash
@@ -186,12 +193,27 @@ Sign out the current user from Supabase Auth.
 
 All consult routes require a valid **doctor** JWT.
 
-The typical flow is:
+### The Complete Consultation Flow
 
-```
-POST /consults  →  frontend uploads audio to upload_url  →  POST /consults/{id}/finalize
-  →  poll GET /consults/{id}/status  →  GET /consults/{id}  (once status = in_review)
-```
+To successfully process an audio recording of a medical consultation, the frontend must execute the following sequence:
+
+1. **Start the Consult:** `POST /consults`
+   - Create a new consult row for the patient.
+   - The backend returns a `consult_id` and a signed `upload_url`.
+
+2. **Upload the Audio:** `PUT <upload_url>`
+   - The frontend directly uploads the raw audio file (e.g., `.webm`, `.m4a`) to Supabase Storage using the signed `upload_url`. This bypasses the backend to handle large files efficiently. *(Note: This is a direct HTTP PUT request to Supabase, not a backend API).*
+
+3. **Finalize & Trigger Pipeline:** `POST /consults/{consult_id}/finalize`
+   - Tell the backend that the audio has been successfully uploaded.
+   - The backend will kick off the background worker to transcode the audio to `.wav`, send it to Sarvam AI for transcription and diarization, and prepare the utterances.
+
+4. **Poll for Progress:** `GET /consults/{consult_id}/status`
+   - The frontend should poll this endpoint every 3–5 seconds to check the processing status.
+   - Wait until the `status` becomes `"in_review"`. (If it becomes `"failed"`, check the `sarvam_error`).
+
+5. **Fetch Results:** `GET /consults/{consult_id}`
+   - Once the status is `"in_review"`, call this to retrieve the full, diarized transcript (a list of sentences spoken by the "doctor" vs "patient").
 
 #### `POST /consults`
 Create a new consult session for a patient. Returns a signed Supabase Storage URL (valid 30 min) that the frontend uses to PUT the recorded audio directly.
