@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 215 25% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    --primary: 174 84% 29%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 215 25% 15%;
+
+    --muted: 210 15% 94%;
+    --muted-foreground: 215 10% 46%;
+
+    --accent: 174 84% 29%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 20% 90%;
+    --input: 214 20% 90%;
+    --ring: 174 84% 29%;
+
+    --radius: 0.75rem;
+
+    /* Semantic tier colours */
+    --tier1-bg: 210 33% 96%;
+    --tier1-text: 215 14% 46%;
+    --tier1-border: 214 20% 85%;
+
+    --tier2-bg: 45 96% 89%;
+    --tier2-text: 26 90% 37%;
+    --tier2-border: 48 96% 77%;
+
+    --tier3-bg: 0 100% 94%;
+    --tier3-text: 0 72% 38%;
+    --tier3-border: 0 91% 71%;
+
+    /* Status colours */
+    --status-success: 160 84% 39%;
+    --status-warning: 38 92% 50%;
+    --status-danger: 0 72% 51%;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 25% 15%;
+    --sidebar-primary: 174 84% 29%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 20% 96%;
+    --sidebar-accent-foreground: 215 25% 15%;
+    --sidebar-border: 214 20% 90%;
+    --sidebar-ring: 174 84% 29%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  h1 {
+    @apply text-[22px] font-medium text-foreground;
+  }
+
+  h2 {
+    @apply text-lg font-medium text-foreground;
+  }
+
+  h3 {
+    @apply text-base font-medium text-foreground;
+  }
+}
+
+@layer utilities {
+  .text-tier1 {
+    color: hsl(var(--tier1-text));
+  }
+  .bg-tier1 {
+    background-color: hsl(var(--tier1-bg));
+  }
+  .border-tier1 {
+    border-color: hsl(var(--tier1-border));
+  }
+  .text-tier2 {
+    color: hsl(var(--tier2-text));
+  }
+  .bg-tier2 {
+    background-color: hsl(var(--tier2-bg));
+  }
+  .border-tier2 {
+    border-color: hsl(var(--tier2-border));
+  }
+  .text-tier3 {
+    color: hsl(var(--tier3-text));
+  }
+  .bg-tier3 {
+    background-color: hsl(var(--tier3-bg));
+  }
+  .border-tier3 {
+    border-color: hsl(var(--tier3-border));
+  }
+  .text-success {
+    color: hsl(var(--status-success));
+  }
+  .text-warning {
+    color: hsl(var(--status-warning));
+  }
+  .text-danger {
+    color: hsl(var(--status-danger));
+  }
+  .bg-success {
+    background-color: hsl(var(--status-success));
+  }
+  .bg-warning {
+    background-color: hsl(var(--status-warning));
+  }
+
+  /* Waveform animation */
+  @keyframes waveform {
+    0%, 100% { height: 8px; }
+    50% { height: 24px; }
+  }
+  .animate-waveform {
+    animation: waveform 0.8s ease-in-out infinite;
+  }
+
+  /* Pulse for recording */
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .animate-pulse-dot {
+    animation: pulse-dot 1.2s ease-in-out infinite;
+  }
+}
