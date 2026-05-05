@@ -1,148 +1,199 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from typing import Optional, Literal
 from gotrue.errors import AuthApiError
 from postgrest.exceptions import APIError
+
 from db.session import get_supabase, get_supabase_admin
+from core.auth import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+
 # Schemas
 
-class LoginRequest(BaseModel):
-    phone: str
-    password: str
+class OtpStartRequest(BaseModel):
+    phone: str = Field(..., description="E.164 phone number, e.g. +919876543210")
 
-class DoctorSignupRequest(BaseModel):
+
+class OtpVerifyRequest(BaseModel):
     phone: str
-    password: str
+    token: str = Field(..., min_length=4, max_length=10)
+
+
+class DoctorProfileRequest(BaseModel):
     name: str
     clinic_name: str
     city: str
 
-class PatientSignupRequest(BaseModel):
-    phone: str
-    password: str
+
+class PatientProfileRequest(BaseModel):
     name: str
-    age: int
+    age: int = Field(..., ge=0, le=150)
     blood_group: str
 
-#  Doctor Auth 
 
-@router.post("/doctor/signup")
-async def doctor_signup(body: DoctorSignupRequest):
+# Helpers
+
+def _normalize_phone(phone: str) -> str:
+    # Strip whitespace; Supabase wants strict E.164
+    return "".join(phone.split())
+
+
+def _lookup_role(admin, user_id: str) -> tuple[Optional[Literal["doctor", "patient"]], Optional[dict]]:
+    doc = admin.table("doctors").select("*").eq("id", user_id).execute()
+    if doc.data:
+        return "doctor", doc.data[0]
+    pat = admin.table("patients").select("*").eq("id", user_id).execute()
+    if pat.data:
+        return "patient", pat.data[0]
+    return None, None
+
+
+# OTP
+
+@router.post("/otp/start")
+async def otp_start(body: OtpStartRequest):
+    """Trigger an SMS OTP to the given phone. Creates the auth user on first use."""
+    supabase = get_supabase()
+    phone = _normalize_phone(body.phone)
+    try:
+        supabase.auth.sign_in_with_otp({
+            "phone": phone,
+            "options": {"should_create_user": True},
+        })
+        return {"message": "OTP sent"}
+    except AuthApiError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/otp/verify")
+async def otp_verify(body: OtpVerifyRequest):
+    """Verify an OTP. Returns session tokens plus role/profile if the user has completed onboarding."""
     supabase = get_supabase()
     admin = get_supabase_admin()
+    phone = _normalize_phone(body.phone)
 
     try:
-        res = supabase.auth.sign_up({"phone": body.phone, "password": body.password})
-        if res.user is None:
-            raise HTTPException(400, "Signup failed")
-            
-        user_id = res.user.id
+        res = supabase.auth.verify_otp({
+            "phone": phone,
+            "token": body.token,
+            "type": "sms",
+        })
+    except AuthApiError as e:
+        raise HTTPException(status_code=401, detail=e.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+    if not res.user or not res.session:
+        raise HTTPException(401, "Invalid OTP")
+
+    role, profile = _lookup_role(admin, res.user.id)
+
+    return {
+        "access_token": res.session.access_token,
+        "refresh_token": res.session.refresh_token,
+        "is_new": role is None,
+        "role": role,
+        "user": {
+            "id": res.user.id,
+            "phone": res.user.phone,
+            **(profile or {}),
+        },
+    }
+
+
+# Profile completion (post-OTP onboarding)
+
+@router.post("/doctor/complete-profile")
+async def doctor_complete_profile(
+    body: DoctorProfileRequest,
+    user: dict = Depends(get_current_user),
+):
+    """First-time doctor onboarding. Requires a valid Supabase JWT from /auth/otp/verify."""
+    admin = get_supabase_admin()
+    user_id = user["sub"]
+
+    role, _ = _lookup_role(admin, user_id)
+    if role is not None:
+        raise HTTPException(409, f"Profile already exists as {role}")
+
+    try:
         admin.table("doctors").insert({
             "id": user_id,
             "name": body.name,
             "clinic_name": body.clinic_name,
             "city": body.city,
-            "phone": body.phone,
+            "phone": user.get("phone"),
         }).execute()
-
-        return {"message": "Doctor account created", "user_id": user_id}
-    except AuthApiError as e:
-        raise HTTPException(status_code=400, detail=e.message)
     except APIError as e:
         raise HTTPException(status_code=400, detail=e.message)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.post("/doctor/login")
-async def doctor_login(body: LoginRequest):
-    supabase = get_supabase()
-    admin = get_supabase_admin()
-
-    res = supabase.auth.sign_in_with_password({"phone": body.phone, "password": body.password})
-    if res.user is None:
-        raise HTTPException(401, "Invalid credentials")
-
-    result = admin.table("doctors").select("*").eq("id", res.user.id).execute()
-    if not result.data:
-        raise HTTPException(403, "Not a doctor account")
-
-    doctor = result.data[0]
     return {
-        "access_token": res.session.access_token,
-        "refresh_token": res.session.refresh_token,
         "role": "doctor",
         "user": {
-            "id": res.user.id,
-            "name": doctor["name"],
-            "clinic_name": doctor["clinic_name"],
-            "city": doctor["city"],
-            "phone": doctor["phone"],
-        }
+            "id": user_id,
+            "phone": user.get("phone"),
+            "name": body.name,
+            "clinic_name": body.clinic_name,
+            "city": body.city,
+        },
     }
 
-#  Patient Auth 
 
-@router.post("/patient/signup")
-async def patient_signup(body: PatientSignupRequest):
-    supabase = get_supabase()
+@router.post("/patient/complete-profile")
+async def patient_complete_profile(
+    body: PatientProfileRequest,
+    user: dict = Depends(get_current_user),
+):
+    """First-time patient onboarding. Requires a valid Supabase JWT from /auth/otp/verify."""
     admin = get_supabase_admin()
+    user_id = user["sub"]
+
+    role, _ = _lookup_role(admin, user_id)
+    if role is not None:
+        raise HTTPException(409, f"Profile already exists as {role}")
 
     try:
-        res = supabase.auth.sign_up({"phone": body.phone, "password": body.password})
-        if res.user is None:
-            raise HTTPException(400, "Signup failed")
-
-        user_id = res.user.id
-
         admin.table("patients").insert({
             "id": user_id,
             "name": body.name,
             "age": body.age,
-            "phone": body.phone,
+            "phone": user.get("phone"),
             "blood_group": body.blood_group,
         }).execute()
-
-        return {"message": "Patient account created", "user_id": user_id}
-    except AuthApiError as e:
-        raise HTTPException(status_code=400, detail=e.message)
     except APIError as e:
         raise HTTPException(status_code=400, detail=e.message)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.post("/patient/login")
-async def patient_login(body: LoginRequest):
-    supabase = get_supabase()
-    admin = get_supabase_admin()
-
-    res = supabase.auth.sign_in_with_password({"phone": body.phone, "password": body.password})
-    if res.user is None:
-        raise HTTPException(401, "Invalid credentials")
-
-    result = admin.table("patients").select("*").eq("id", res.user.id).execute()
-    if not result.data:
-        raise HTTPException(403, "Not a patient account")
-
-    patient = result.data[0]
     return {
-        "access_token": res.session.access_token,
-        "refresh_token": res.session.refresh_token,
         "role": "patient",
         "user": {
-            "id": res.user.id,
-            "name": patient["name"],
-            "age": patient["age"],
-            "phone": patient["phone"],
-            "blood_group": patient["blood_group"],
-        }
+            "id": user_id,
+            "phone": user.get("phone"),
+            "name": body.name,
+            "age": body.age,
+            "blood_group": body.blood_group,
+        },
     }
 
-#  Shared 
+
+# Session
+
+@router.get("/me")
+async def me(user: dict = Depends(get_current_user)):
+    """Return the authenticated user's role and profile, if any."""
+    admin = get_supabase_admin()
+    role, profile = _lookup_role(admin, user["sub"])
+    return {
+        "id": user["sub"],
+        "phone": user.get("phone"),
+        "role": role,
+        "is_new": role is None,
+        "profile": profile,
+    }
+
 
 @router.post("/logout")
 async def logout():
