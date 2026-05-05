@@ -2,26 +2,52 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Stethoscope, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { api, auth, ApiError } from '@/lib/api';
 import type { UserRole } from '@/types';
 
 export default function Onboarding() {
   const [role, setRole] = useState<UserRole | null>(null);
   const [name, setName] = useState('');
-  const [specialty, setSpecialty] = useState('');
-  const [regNumber, setRegNumber] = useState('');
   const [clinicName, setClinicName] = useState('');
-  const [dob, setDob] = useState('');
-  const [sex, setSex] = useState('');
+  const [city, setCity] = useState('');
+  const [age, setAge] = useState<string>('');
   const [bloodGroup, setBloodGroup] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const handleSubmit = () => {
-    if (role === 'doctor') navigate('/doctor');
-    else navigate('/patient');
+  const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+  const handleSubmit = async () => {
+    setError(null);
+    setSubmitting(true);
+    try {
+      if (role === 'doctor') {
+        await api.post('/auth/doctor/complete-profile', {
+          name,
+          clinic_name: clinicName,
+          city,
+        });
+        auth.setRole('doctor');
+        navigate('/doctor');
+      } else if (role === 'patient') {
+        await api.post('/auth/patient/complete-profile', {
+          name,
+          age: parseInt(age, 10),
+          blood_group: bloodGroup,
+        });
+        auth.setRole('patient');
+        navigate('/patient');
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to save profile');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const specialties = ['General Medicine', 'Pediatrics', 'Cardiology', 'Dermatology', 'Orthopedics', 'ENT', 'Gynecology', 'Other'];
-  const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+  const doctorReady = !!name && !!clinicName && !!city;
+  const patientReady = !!name && !!age && !!bloodGroup;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
@@ -62,21 +88,17 @@ export default function Onboarding() {
               <input className="mt-1.5 w-full h-11 px-3 rounded-md border border-input bg-background text-sm" value={name} onChange={e => setName(e.target.value)} placeholder="Dr. Priya Verma" />
             </div>
             <div>
-              <label className="text-sm font-medium">Specialty</label>
-              <select className="mt-1.5 w-full h-11 px-3 rounded-md border border-input bg-background text-sm" value={specialty} onChange={e => setSpecialty(e.target.value)}>
-                <option value="">Select specialty</option>
-                {specialties.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Registration number</label>
-              <input className="mt-1.5 w-full h-11 px-3 rounded-md border border-input bg-background text-sm" value={regNumber} onChange={e => setRegNumber(e.target.value)} placeholder="Self-attested for now" />
-            </div>
-            <div>
               <label className="text-sm font-medium">Clinic name</label>
-              <input className="mt-1.5 w-full h-11 px-3 rounded-md border border-input bg-background text-sm" value={clinicName} onChange={e => setClinicName(e.target.value)} />
+              <input className="mt-1.5 w-full h-11 px-3 rounded-md border border-input bg-background text-sm" value={clinicName} onChange={e => setClinicName(e.target.value)} placeholder="Verma Clinic" />
             </div>
-            <Button className="w-full min-h-[44px]" disabled={!name || !specialty} onClick={handleSubmit}>Continue</Button>
+            <div>
+              <label className="text-sm font-medium">City</label>
+              <input className="mt-1.5 w-full h-11 px-3 rounded-md border border-input bg-background text-sm" value={city} onChange={e => setCity(e.target.value)} placeholder="Mumbai" />
+            </div>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <Button className="w-full min-h-[44px]" disabled={!doctorReady || submitting} onClick={handleSubmit}>
+              {submitting ? 'Saving...' : 'Continue'}
+            </Button>
           </div>
         )}
 
@@ -87,19 +109,16 @@ export default function Onboarding() {
               <input className="mt-1.5 w-full h-11 px-3 rounded-md border border-input bg-background text-sm" value={name} onChange={e => setName(e.target.value)} placeholder="Asha Sharma" />
             </div>
             <div>
-              <label className="text-sm font-medium">Date of birth</label>
-              <input type="date" className="mt-1.5 w-full h-11 px-3 rounded-md border border-input bg-background text-sm" value={dob} onChange={e => setDob(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Sex</label>
-              <div className="flex gap-3 mt-1.5">
-                {['M', 'F', 'Other', 'Prefer not to say'].map(s => (
-                  <label key={s} className={`flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer min-h-[44px] text-sm ${sex === s ? 'border-primary bg-primary/5' : 'border-border'}`}>
-                    <input type="radio" name="sex" value={s} checked={sex === s} onChange={e => setSex(e.target.value)} className="sr-only" />
-                    {s}
-                  </label>
-                ))}
-              </div>
+              <label className="text-sm font-medium">Age</label>
+              <input
+                type="number"
+                min={0}
+                max={150}
+                className="mt-1.5 w-full h-11 px-3 rounded-md border border-input bg-background text-sm"
+                value={age}
+                onChange={e => setAge(e.target.value)}
+                placeholder="34"
+              />
             </div>
             <div>
               <label className="text-sm font-medium">Blood group</label>
@@ -108,7 +127,10 @@ export default function Onboarding() {
                 {bloodGroups.map(bg => <option key={bg} value={bg}>{bg}</option>)}
               </select>
             </div>
-            <Button className="w-full min-h-[44px]" disabled={!name} onClick={handleSubmit}>Continue</Button>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <Button className="w-full min-h-[44px]" disabled={!patientReady || submitting} onClick={handleSubmit}>
+              {submitting ? 'Saving...' : 'Continue'}
+            </Button>
           </div>
         )}
       </div>

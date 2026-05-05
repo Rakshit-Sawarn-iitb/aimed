@@ -14,6 +14,7 @@ import PatientShares from "./pages/PatientShares";
 import SharedRecord from "./pages/SharedRecord";
 import DoctorLayout from "./components/layout/DoctorLayout";
 import PatientLayout from "./components/layout/PatientLayout";
+import RequireAuth from "./components/shared/RequireAuth";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,17 +30,21 @@ const App = () => (
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/shared/:token" element={<SharedRecord />} />
 
-          <Route element={<DoctorLayout />}>
-            <Route path="/doctor" element={<DoctorDashboard />} />
-            <Route path="/doctor/patients" element={<PatientList />} />
-            <Route path="/doctor/patients/:patientId" element={<PatientRecord />} />
-            <Route path="/doctor/consult/new" element={<NewConsult />} />
-            <Route path="/doctor/consult/:consultId" element={<NewConsult />} />
+          <Route element={<RequireAuth role="doctor" />}>
+            <Route element={<DoctorLayout />}>
+              <Route path="/doctor" element={<DoctorDashboard />} />
+              <Route path="/doctor/patients" element={<PatientList />} />
+              <Route path="/doctor/patients/:patientId" element={<PatientRecord />} />
+              <Route path="/doctor/consult/new" element={<NewConsult />} />
+              <Route path="/doctor/consult/:consultId" element={<NewConsult />} />
+            </Route>
           </Route>
 
-          <Route element={<PatientLayout />}>
-            <Route path="/patient" element={<PatientHome />} />
-            <Route path="/patient/shares" element={<PatientShares />} />
+          <Route element={<RequireAuth role="patient" />}>
+            <Route element={<PatientLayout />}>
+              <Route path="/patient" element={<PatientHome />} />
+              <Route path="/patient/shares" element={<PatientShares />} />
+            </Route>
           </Route>
 
           <Route path="*" element={<NotFound />} />

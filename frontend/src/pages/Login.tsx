@@ -2,44 +2,75 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { OtpInput } from '@/components/shared/OtpInput';
+import { api, auth, ApiError } from '@/lib/api';
 
 type Step = 'phone' | 'otp';
+
+interface VerifyResponse {
+  access_token: string;
+  refresh_token: string;
+  is_new: boolean;
+  role: 'doctor' | 'patient' | null;
+  user: { id: string; phone?: string };
+}
 
 export default function Login() {
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('+91 ');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
   const navigate = useNavigate();
 
+  const e164 = (raw: string) => raw.replace(/\s+/g, '');
+
   const handleSendOtp = useCallback(async () => {
+    setError(null);
     setLoading(true);
-    // Mock: simulate OTP send
-    await new Promise(r => setTimeout(r, 800));
-    setLoading(false);
-    setStep('otp');
-    setCountdown(30);
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) { clearInterval(timer); return 0; }
-        return prev - 1;
-      });
-    }, 1000);
-  }, []);
+    try {
+      await api.post('/auth/otp/start', { phone: e164(phone) });
+      setStep('otp');
+      setCountdown(30);
+      const timer = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) { clearInterval(timer); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to send OTP');
+    } finally {
+      setLoading(false);
+    }
+  }, [phone]);
 
   const handleVerify = useCallback(async (otp: string) => {
+    setError(null);
     setLoading(true);
-    await new Promise(r => setTimeout(r, 800));
-    setLoading(false);
-    // Mock: navigate to onboarding or dashboard
-    navigate('/onboarding');
-  }, [navigate]);
+    try {
+      const res = await api.post<VerifyResponse>('/auth/otp/verify', {
+        phone: e164(phone),
+        token: otp,
+      });
+      auth.setSession(res.access_token, res.refresh_token, res.role);
+      if (res.is_new || res.role === null) {
+        navigate('/onboarding');
+      } else if (res.role === 'doctor') {
+        navigate('/doctor');
+      } else {
+        navigate('/patient');
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Invalid OTP');
+    } finally {
+      setLoading(false);
+    }
+  }, [phone, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm">
         <div className="bg-card border border-border rounded-xl p-8 space-y-6">
-          {/* Logo */}
           <div className="text-center space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight text-primary">AIMED</h1>
             <p className="text-sm text-muted-foreground">Medical record verification</p>
@@ -57,6 +88,7 @@ export default function Login() {
                   placeholder="+91 98765 43210"
                 />
               </div>
+              {error && <p className="text-xs text-destructive">{error}</p>}
               <Button
                 className="w-full min-h-[44px]"
                 disabled={phone.replace(/\D/g, '').length < 10 || loading}
@@ -72,6 +104,7 @@ export default function Login() {
                 <p className="text-xs text-muted-foreground mt-0.5">Sent to {phone}</p>
               </div>
               <OtpInput onComplete={handleVerify} disabled={loading} />
+              {error && <p className="text-xs text-destructive text-center">{error}</p>}
               <div className="text-center">
                 {countdown > 0 ? (
                   <p className="text-xs text-muted-foreground">Resend in 0:{countdown.toString().padStart(2, '0')}</p>
@@ -81,6 +114,12 @@ export default function Login() {
                   </button>
                 )}
               </div>
+              <button
+                className="w-full text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => { setStep('phone'); setError(null); }}
+              >
+                Change phone number
+              </button>
             </div>
           )}
         </div>
