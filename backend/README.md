@@ -246,9 +246,10 @@ Tell the server the audio upload is complete and start the transcription pipelin
 2. Transcode to 16 kHz mono WAV (ffmpeg)
 3. Submit to Sarvam Saaras v3 (`codemix`, `with_diarization=True`, `num_speakers=2`)
 4. Poll until complete, parse diarized JSON
-5. Label speakers (doctor vs patient via first-speaker heuristic)
+5. Label speakers using Gemini (or first-speaker fallback)
 6. Persist utterances to `utterances` table
-7. Update consult status → `extracting` (Claude extraction runs next)
+7. Extract structured SOAP notes and medical facts via LLM
+8. Update consult status → `in_review`
 
 - **Auth:** Doctor JWT required
 - **Path param:** `consult_id` — UUID from `POST /consults`
@@ -307,7 +308,7 @@ Lightweight polling endpoint. Returns just the status, any error, and utterance 
 ---
 
 #### `GET /consults/{consult_id}`
-Full consult detail including all diarized utterances and the speaker map. Available once `status` is `extracting` or later.
+Full consult detail including all diarized utterances, the speaker map, and the generated SOAP report. Available once `status` is `in_review` or later.
 
 - **Auth:** Doctor JWT required
 - **Path param:** `consult_id`
@@ -358,7 +359,7 @@ Full consult detail including all diarized utterances and the speaker map. Avail
 ---
 
 #### `PATCH /consults/{consult_id}/speaker`
-Correct the speaker labels if the heuristic got them wrong. Re-labels all utterances in the consult and updates `transcript_json`. Only allowed while `status` is `in_review` or `extracting`.
+Correct the speaker labels if the LLM or heuristic got them wrong. Re-labels all utterances in the consult, updates `transcript_json`, and **automatically re-runs the SOAP extraction in the background**. Only allowed while `status` is `in_review` or `extracting`.
 
 - **Auth:** Doctor JWT required
 - **Path param:** `consult_id`
@@ -388,11 +389,35 @@ Correct the speaker labels if the heuristic got them wrong. Re-labels all uttera
 ### Reports — `/reports`
 
 #### `GET /reports/`
-Fetch all reports belonging to the authenticated doctor. (Placeholder route — full implementation coming with Claude extraction.)
+Fetch all generated reports belonging to the authenticated doctor.
 
 - **Auth:** Doctor JWT required
-- **Input:** None
-- **Response `200`:** Array of report rows from the `reports` table.
+- **Response `200`:** Array of `ReportOut` objects containing SOAP notes, drug interactions, etc.
+
+---
+
+#### `GET /reports/{consult_id}`
+Fetch the generated SOAP report for a specific consult.
+
+- **Auth:** Doctor JWT required
+- **Response `200`:** A `ReportOut` object containing the `soap_note`, `drug_interactions`, `missing_fields`, `followup_questions`, and `plain_language_summary`.
+- **Errors:** `404` not found, `403` not your consult.
+
+---
+
+#### `PATCH /reports/{consult_id}`
+Doctor edits free-text SOAP fields directly. Only allowed while the consult is in `in_review`.
+
+- **Auth:** Doctor JWT required
+- **Request body:**
+```json
+{
+  "soap_assessment": "Patient has acute pharyngitis.",
+  "soap_plan": "Prescribed Amoxicillin. Follow up in 5 days."
+}
+```
+- **Response `200`:** The updated `ReportOut` object.
+- **Errors:** `404` not found, `403` not your consult, `409` report can only be edited while in review.
 
 ---
 
@@ -411,7 +436,8 @@ backend/
 │
 ├── core/
 │   ├── config.py                  # pydantic-settings (reads .env)
-│   └── auth.py                    # JWT verification dependency
+│   ├── auth.py                    # JWT verification dependency
+│   └── llm.py                     # Generic LLM class for Gemini API interactions
 │
 ├── db/
 │   ├── session.py                 # Supabase client factory
@@ -428,7 +454,8 @@ backend/
 ├── services/
 │   ├── audio_pipeline.py          # ffmpeg transcode + Supabase Storage I/O
 │   ├── sarvam_client.py           # Sarvam Saaras v3 job submit/poll/parse
-│   └── speaker_labeling.py        # Doctor vs patient speaker assignment
+│   ├── speaker_labeling.py        # Doctor vs patient speaker assignment (LLM-based)
+│   └── soap.py                    # SOAP extraction & structured report generation
 │
 └── workers/
     └── transcription_worker.py    # Background task orchestrating the full pipeline
@@ -445,5 +472,6 @@ backend/
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (bypasses RLS) |
 | `SUPABASE_DATABASE_URI` | Full Postgres connection string (URL-encode `@` in password as `%40`) |
 | `JWT_SECRET` | Supabase JWT secret for token verification |
+| `GEMINI_API_KEY` | Google Gemini API key (for speaker labeling & SOAP generation) |
 | `SARVAM_API_KEY` | Sarvam AI subscription key |
-| `ANTHROPIC_API_KEY` | Anthropic Claude API key (for fact extraction — coming next) |
+| `ANTHROPIC_API_KEY` | Anthropic Claude API key (optional/fallback) |
