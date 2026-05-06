@@ -142,10 +142,10 @@ function Hero() {
       </div>
 
       {/* Scroll cue */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-muted-foreground text-xs flex flex-col items-center gap-1 animate-float">
+      {/* <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-muted-foreground text-xs flex flex-col items-center gap-1 animate-float">
         <span className="font-mono uppercase tracking-widest">Scroll</span>
         <div className="h-8 w-px bg-gradient-to-b from-muted-foreground to-transparent" />
-      </div>
+      </div> */}
     </section>
   );
 }
@@ -206,7 +206,7 @@ function DemoCard() {
           <div className="flex items-start gap-2">
             <span className="text-[10px] font-mono uppercase text-emerald-700 mt-0.5">PT</span>
             <p className="text-foreground/90">
-              Doctor saab, teen din se bukhar aa raha hai aur gala bhi <span className="bg-yellow-200/60 px-1 rounded">kharab</span> hai.
+              Doctor saab, teen din se <span className="bg-yellow-200/60 px-1 rounded">bukhar</span> aa raha hai aur gala bhi <span className="bg-yellow-200/60 px-1 rounded">kharab</span> hai.
             </p>
           </div>
           <div className="flex items-start gap-2 opacity-60">
@@ -272,7 +272,7 @@ function ProblemSection() {
 
         {/* Real-world pull-quote */}
         <div className="mt-16 max-w-3xl mx-auto">
-          <blockquote className="relative pl-8 border-l-4 border-primary/30">
+          <blockquote className="relative pl-8">
             <div className="absolute -left-3 top-0 text-6xl font-display text-primary/30 leading-none">"</div>
             <p className="font-display italic text-2xl md:text-3xl leading-snug text-foreground/90">
               I told the last doctor about my penicillin allergy three times. The new one wrote
@@ -401,7 +401,7 @@ function ArchitectureSection() {
             {steps.map((s, i) => (
               <div key={s.label} className="flex items-center gap-2 md:gap-3 flex-1 min-w-[140px]">
                 <div className="flex-1 group relative bg-background border border-border rounded-2xl p-4 hover:border-primary/40 hover:-translate-y-1 transition-all">
-                  <div className={`absolute inset-x-0 -top-px h-px bg-gradient-to-r ${s.color} opacity-50`} />
+                  {/* <div className={`absolute inset-x-0 -top-px h-px bg-gradient-to-r ${s.color} opacity-50`} /> */}
                   <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-3">
                     {s.icon}
                   </div>
