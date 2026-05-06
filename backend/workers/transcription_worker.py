@@ -46,7 +46,7 @@ from services.facts_extractor import extract_facts, assign_risk_tiers
 
 logger = logging.getLogger(__name__)
 
-EXTRACTION_MODEL = "gemini-2.5-flash"
+EXTRACTION_MODEL = "claude-sonnet-4-6"   # used for both SOAP and facts extraction
 
 
 # ---------------------------------------------------------------------------
