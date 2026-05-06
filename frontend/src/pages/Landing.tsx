@@ -56,9 +56,7 @@ function TopNav() {
         <Link to="/" className="flex items-center gap-2 group">
           <div className="relative">
             <div className="absolute inset-0 rounded-md bg-primary/20 blur-md group-hover:bg-primary/40 transition-colors" />
-            <div className="relative h-8 w-8 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-display font-bold">
-              A
-            </div>
+            <img src="/aimed-logo.jpeg" alt="AIMED Logo" className="relative h-8 w-8 rounded-md object-cover" />
           </div>
           <span className="font-display text-xl font-semibold tracking-tight">AIMED</span>
         </Link>
@@ -100,10 +98,10 @@ function Hero() {
 
         {/* Left: copy */}
         <div className="md:col-span-7 space-y-7 text-center md:text-left">
-          <h1 className="font-display font-bold text-5xl md:text-7xl leading-[1.05] tracking-tight animate-fade-up">
+          <h1 className="font-display font-bold text-5xl md:text-7xl leading-[1.1] tracking-tight animate-fade-up">
             <span className="block">The doctor</span>
             <span className="block">writes nothing.</span>
-            <span className="block text-gradient-teal italic">The patient owns everything.</span>
+            <span className="block text-gradient-teal italic pb-2 pr-2">The patient owns everything.</span>
           </h1>
 
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl animate-fade-up anim-delay-200">
@@ -339,7 +337,7 @@ function SolutionSection() {
           <p className="text-xs font-mono uppercase tracking-widest text-primary mb-3">The solution</p>
           <h2 className="font-display text-4xl md:text-5xl font-semibold leading-tight">
             An audit-grade scribe that{' '}
-            <span className="text-gradient-teal italic">refuses to make decisions for you.</span>
+            <span className="text-gradient-teal italic pb-1 pr-2 inline-block">refuses to make decisions for you.</span>
           </h2>
           <p className="text-lg text-muted-foreground mt-6">
             AIMED extracts what was <em className="text-foreground not-italic">said in the room</em>.
@@ -607,7 +605,7 @@ function Footer() {
     <footer className="border-t border-border mt-12">
       <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
         <div className="flex items-center gap-2">
-          <div className="h-6 w-6 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-display font-bold text-xs">A</div>
+          <img src="/aimed-logo.jpeg" alt="AIMED Logo" className="h-6 w-6 rounded-md object-cover" />
           <span className="font-display font-semibold">AIMED</span>
         </div>
         <div className="text-xs flex items-center gap-1.5">

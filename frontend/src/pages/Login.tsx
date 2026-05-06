@@ -72,7 +72,10 @@ export default function Login() {
       <div className="w-full max-w-sm">
         <div className="bg-card border border-border rounded-xl p-8 space-y-6">
           <div className="text-center space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-primary">AIMED</h1>
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <img src="/aimed-logo.jpeg" alt="AIMED Logo" className="w-8 h-8 rounded-md object-cover" />
+              <h1 className="text-2xl font-semibold tracking-tight text-primary">AIMED</h1>
+            </div>
             <p className="text-sm text-muted-foreground">Medical record verification</p>
           </div>
 

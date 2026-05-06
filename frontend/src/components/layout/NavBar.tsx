@@ -34,8 +34,9 @@ export function NavBar({ userName, hasNotifications = false, role, onLogout }: N
     <header className="h-14 flex items-center justify-between px-4 bg-card border-b border-border shrink-0">
       <button
         onClick={() => navigate(role === 'doctor' ? '/doctor' : '/patient')}
-        className="flex items-center gap-2 min-h-[44px]"
+        className="flex items-center gap-2 min-h-[44px] transition-opacity hover:opacity-80"
       >
+        <img src="/aimed-logo.jpeg" alt="AIMED Logo" className="w-8 h-8 rounded-md object-cover" />
         <span className="text-lg font-semibold tracking-tight text-primary">AIMED</span>
       </button>
 
