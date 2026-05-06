@@ -106,8 +106,8 @@ function Hero() {
 
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl animate-fade-up anim-delay-200">
             AIMED records a doctor-patient consultation in <em className="text-foreground not-italic">Hindi-English code-mix</em>,
-            transcribes it with speaker diarization, and lets Claude extract a structured medical record —
-            then forces the doctor to verify every high-risk fact, with the source audio one tap away.
+            transcribes it with speaker diarization, and lets Claude extract a structured medical record.
+            Then it forces the doctor to verify every high-risk fact, with the source audio one tap away.
           </p>
 
           <div className="flex flex-wrap gap-3 justify-center md:justify-start animate-fade-up anim-delay-300">
@@ -247,7 +247,7 @@ function ProblemSection() {
         <div className="max-w-3xl mb-16">
           <p className="text-xs font-mono uppercase tracking-widest text-primary mb-3">The problem</p>
           <h2 className="font-display text-4xl md:text-5xl font-semibold leading-tight">
-            Indian medicine has a memory problem —{' '}
+            Indian medicine has a memory problem,{' '}
             <span className="italic text-muted-foreground">and AI scribes are making it worse.</span>
           </h2>
         </div>
@@ -261,12 +261,12 @@ function ProblemSection() {
           <ProblemCard
             icon={<Stethoscope className="h-5 w-5" />}
             title="Doctors skip the notes."
-            body="Dr. Verma sees 50 patients a day. SOAP notes eat 30% of consult time. So she skips them — then reconstructs history from memory on the next visit, and prescription errors creep in."
+            body="Dr. Verma sees 50 patients a day. SOAP notes eat 30% of consult time. So she skips them, then reconstructs history from memory on the next visit, and prescription errors creep in."
           />
           <ProblemCard
             icon={<AlertTriangle className="h-5 w-5" />}
             title="Existing scribes rubber-stamp."
-            body="Most AI scribes are built for English-speaking US contexts. Indian code-mix breaks them. When they do work, doctors bulk-approve outputs they never read — turning AI hallucinations into prescriptions."
+            body="Most AI scribes are built for English-speaking US contexts. Indian code-mix breaks them. When they do work, doctors bulk-approve outputs they never read, turning AI hallucinations into prescriptions."
           />
         </div>
 
@@ -278,7 +278,7 @@ function ProblemSection() {
               I told the last doctor about my penicillin allergy three times. The new one wrote
               an antibiotic anyway. He said it wasn't in the file.
             </p>
-            <footer className="mt-4 text-sm text-muted-foreground">— Asha, OPD patient, Mumbai</footer>
+            <footer className="mt-4 text-sm text-muted-foreground">Asha, OPD patient, Mumbai</footer>
           </blockquote>
         </div>
       </div>
@@ -313,14 +313,14 @@ function SolutionSection() {
     {
       icon: <Brain className="h-5 w-5" />,
       label: 'Extract',
-      title: 'Claude reads the room — only what was said.',
+      title: 'Claude reads the room. Only what was said.',
       body: 'Claude Sonnet 4.6 with tool-use enforces a strict schema. Every fact carries a literal evidence quote and source utterance indices. The AI does not diagnose. Ever.',
     },
     {
       icon: <ShieldCheck className="h-5 w-5" />,
       label: 'Verify',
       title: 'The doctor cannot rubber-stamp.',
-      body: 'Tier-1 facts bulk-approve. Tier-2 individually. Tier-3 (medications, allergies, diagnoses) require a tap — and the audio anchor must be played, server-side enforced, server-side audited.',
+      body: 'Tier-1 facts bulk-approve. Tier-2 individually. Tier-3 (medications, allergies, diagnoses) require a tap, and the audio anchor must be played. Server-side enforced, server-side audited.',
     },
     {
       icon: <Share2 className="h-5 w-5" />,
@@ -341,7 +341,7 @@ function SolutionSection() {
           </h2>
           <p className="text-lg text-muted-foreground mt-6">
             AIMED extracts what was <em className="text-foreground not-italic">said in the room</em>.
-            It does not recommend, prescribe, or diagnose. That is the legal and ethical line —
+            It does not recommend, prescribe, or diagnose. That is the legal and ethical line,
             and the cleanest pitch we can give a judge or a patient.
           </p>
         </div>
@@ -439,7 +439,7 @@ function ArchPoint({ title, body }: { title: string; body: string }) {
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
-/*  Verification spine — the showcase                                       */
+/*  Verification spine: the showcase                                        */
 /* ──────────────────────────────────────────────────────────────────────── */
 
 function VerificationSpine() {
@@ -458,7 +458,7 @@ function VerificationSpine() {
             Three tiers. <em className="italic">One unforgiving rule.</em>
           </h2>
           <p className="text-muted-foreground mt-6 leading-relaxed">
-            We meet doctors where they are — overworked, under time pressure — without letting them
+            We meet doctors where they are: overworked, under time pressure, without letting them
             cut corners on the things that hurt patients. Tier-3 facts cannot be bulk-approved.
             The button is disabled until the audio anchor has been played, and the server logs which path was taken.
           </p>
@@ -525,7 +525,7 @@ function EthicsSection() {
   const points = [
     { icon: <Heart   />, title: 'Patient owns the record.',     body: 'No clinic walls. No vendor lock-in. Asha generates time-limited share links and watches who opens them.' },
     { icon: <FileText/>, title: 'Every claim is citable.',      body: 'Each fact carries a literal evidence quote and source utterance indices. The server validates the quote is a real substring before insert.' },
-    { icon: <Users   />, title: 'Patient can dispute.',          body: 'Non-blocking flags ride along with the record. The next doctor sees what Asha disagreed with — without a draft state machine.' },
+    { icon: <Users   />, title: 'Patient can dispute.',          body: 'Non-blocking flags ride along with the record. The next doctor sees what Asha disagreed with, without a draft state machine.' },
     { icon: <ShieldCheck/>, title: 'Lazy review is visible.',    body: 'Audit summary tells the patient: "your doctor played audio for 4 of 8 high-risk facts." Trust pressure flows back to the doctor.' },
   ];
   return (
@@ -538,7 +538,7 @@ function EthicsSection() {
           </h2>
           <p className="text-lg text-muted-foreground mt-6">
             Every claim AIMED makes about the consult is auditable, every doctor action is logged,
-            every patient has a kill-switch. The ethics aren't bolted on — they're how the system fails closed.
+            every patient has a kill-switch. The ethics aren't bolted on; they're how the system fails closed.
           </p>
         </div>
         <div className="grid md:grid-cols-2 gap-6">
@@ -567,28 +567,29 @@ function CtaSection() {
   return (
     <Section className="py-24 px-6">
       <div className="max-w-4xl mx-auto relative">
-        <div aria-hidden className="absolute -inset-6 bg-gradient-to-tr from-primary/30 via-emerald-300/30 to-transparent blur-3xl rounded-3xl" />
-        <div className="relative bg-foreground text-background rounded-3xl p-10 md:p-16 text-center overflow-hidden">
-          <div aria-hidden className="absolute inset-0 bg-grid opacity-10" />
+        <div aria-hidden className="absolute -inset-6 bg-gradient-to-tr from-primary/20 via-emerald-200/30 to-transparent blur-3xl rounded-3xl" />
+        <div className="relative bg-card border border-primary/20 rounded-3xl p-10 md:p-16 text-center overflow-hidden">
+          <div aria-hidden className="absolute inset-0 bg-grid opacity-30" />
+          <div aria-hidden className="absolute -top-32 left-1/2 -translate-x-1/2 h-72 w-[40rem] rounded-full bg-primary/15 blur-3xl" />
           <div className="relative">
             <h2 className="font-display text-4xl md:text-5xl font-semibold leading-tight">
-              Try it on a 60-second consult.
+              Try it on a <span className="italic text-primary">60-second</span> consult.
             </h2>
-            <p className="mt-4 text-background/70 max-w-xl mx-auto">
-              Phone OTP · doctor or patient · works from any browser. Built for the hackathon —
-              opinionated, audit-grade, deliberately narrow.
+            <p className="mt-4 text-muted-foreground max-w-xl mx-auto">
+              Sign in with your phone. Record a short consult in your own voice.
+              Watch Claude extract a structured record you can actually trust.
             </p>
             <div className="mt-8 flex flex-wrap gap-3 justify-center">
               <Link
                 to="/login"
-                className="inline-flex items-center gap-2 h-12 px-7 rounded-full bg-primary text-primary-foreground font-medium hover:scale-[1.02] transition-transform"
+                className="inline-flex items-center gap-2 h-12 px-7 rounded-full bg-primary text-primary-foreground font-medium hover:scale-[1.02] hover:shadow-lg hover:shadow-primary/30 transition-all"
               >
                 Open the app <ArrowRight className="h-4 w-4" />
               </Link>
               <a
                 href="https://github.com/Rakshit-Sawarn-iitb/aimed"
                 target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-2 h-12 px-7 rounded-full border border-background/30 hover:bg-background/10 font-medium transition-colors"
+                className="inline-flex items-center gap-2 h-12 px-7 rounded-full border border-border bg-background hover:bg-secondary font-medium transition-colors"
               >
                 View source
               </a>
