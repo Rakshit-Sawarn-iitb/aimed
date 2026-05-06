@@ -63,6 +63,78 @@ async def list_patients(doctor_id: str = Depends(get_current_doctor_id)):
     return result
 
 
+@router.get("/{patient_id}")
+async def get_patient(
+    patient_id: str,
+    doctor_id: str = Depends(get_current_doctor_id),
+):
+    """
+    Return the patient's profile plus their full consult history with this doctor.
+    For finalized consults, includes the SOAP report summary.
+    """
+    supabase = get_supabase_admin()
+
+    pat_res = (
+        supabase.table("patients")
+        .select("id, name, phone, age, blood_group")
+        .eq("id", patient_id)
+        .single()
+        .execute()
+    )
+    if not pat_res.data:
+        raise HTTPException(status_code=404, detail="Patient not found.")
+
+    consults_res = (
+        supabase.table("consults")
+        .select("id, status, created_at, finalized_at")
+        .eq("patient_id", patient_id)
+        .eq("doctor_id", doctor_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    consults = consults_res.data or []
+
+    # Batch-fetch SOAP reports for all finalized consults in one query
+    finalized_ids = [c["id"] for c in consults if c["status"] == "finalized"]
+    reports_map: dict[str, dict] = {}
+    if finalized_ids:
+        reports_res = (
+            supabase.table("reports")
+            .select(
+                "consult_id, soap_subjective, soap_objective, "
+                "soap_assessment, soap_plan, plain_language_summary, "
+                "followup_questions, drug_interactions"
+            )
+            .in_("consult_id", finalized_ids)
+            .execute()
+        )
+        for r in (reports_res.data or []):
+            reports_map[r["consult_id"]] = r
+
+    consult_list = []
+    for c in consults:
+        entry: dict = {
+            "id":           c["id"],
+            "status":       c["status"],
+            "created_at":   c["created_at"],
+            "finalized_at": c.get("finalized_at"),
+        }
+        if c["id"] in reports_map:
+            r = reports_map[c["id"]]
+            entry["report"] = {
+                "soap_subjective":        r.get("soap_subjective") or "",
+                "soap_objective":         r.get("soap_objective") or "",
+                "soap_assessment":        r.get("soap_assessment") or "",
+                "soap_plan":              r.get("soap_plan") or "",
+                "plain_language_summary": r.get("plain_language_summary"),
+                "followup_questions":     r.get("followup_questions") or [],
+                "drug_interactions":      r.get("drug_interactions") or [],
+            }
+        consult_list.append(entry)
+
+    return {"patient": pat_res.data, "consults": consult_list}
+
+
 @router.get("/by-phone/{phone}")
 async def get_patient_by_phone(
     phone: str,
