@@ -45,7 +45,7 @@ router = APIRouter(prefix="/consults", tags=["consults"])
 
 RAW_AUDIO_BUCKET = "audio-raw"
 UPLOAD_URL_TTL   = 1800
-EXTRACTION_MODEL = "gemini-2.5-flash"
+EXTRACTION_MODEL = "claude-sonnet-4-6"   
 
 
 # ---------------------------------------------------------------------------
