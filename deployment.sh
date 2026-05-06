@@ -13,6 +13,7 @@ sudo apt update
 echo "Installing nginx, supervisor, and nodejs..."
 sudo apt install nginx -y
 sudo apt install supervisor -y
+sudo apt install ffmpeg -y
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
