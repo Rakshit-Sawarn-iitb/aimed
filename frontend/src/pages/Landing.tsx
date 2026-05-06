@@ -100,10 +100,10 @@ function Hero() {
 
         {/* Left: copy */}
         <div className="md:col-span-7 space-y-7 text-center md:text-left">
-          <h1 className="font-display font-bold text-5xl md:text-7xl leading-[1.05] tracking-tight animate-fade-up">
+          <h1 className="font-display font-bold text-5xl md:text-7xl leading-[1.1] tracking-tight animate-fade-up">
             <span className="block">The doctor</span>
             <span className="block">writes nothing.</span>
-            <span className="block text-gradient-teal italic">The patient owns everything.</span>
+            <span className="block text-gradient-teal italic pb-2 pr-2">The patient owns everything.</span>
           </h1>
 
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl animate-fade-up anim-delay-200">
@@ -339,7 +339,7 @@ function SolutionSection() {
           <p className="text-xs font-mono uppercase tracking-widest text-primary mb-3">The solution</p>
           <h2 className="font-display text-4xl md:text-5xl font-semibold leading-tight">
             An audit-grade scribe that{' '}
-            <span className="text-gradient-teal italic">refuses to make decisions for you.</span>
+            <span className="text-gradient-teal italic pb-1 pr-2 inline-block">refuses to make decisions for you.</span>
           </h2>
           <p className="text-lg text-muted-foreground mt-6">
             AIMED extracts what was <em className="text-foreground not-italic">said in the room</em>.
