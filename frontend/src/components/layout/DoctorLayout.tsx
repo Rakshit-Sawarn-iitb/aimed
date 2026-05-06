@@ -9,7 +9,7 @@ export default function DoctorLayout() {
   const name = profileName(me) || (loading ? '' : 'Doctor');
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       <NavBar userName={name} hasNotifications={false} role="doctor" />
       <div className="flex-1 flex overflow-hidden">
         <DoctorSidebar />

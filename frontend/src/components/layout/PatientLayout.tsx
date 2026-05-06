@@ -8,7 +8,7 @@ export default function PatientLayout() {
   const name = profileName(me) || (loading ? '' : 'Patient');
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       <NavBar userName={name} role="patient" />
       <Outlet />
       <BottomTabBar role="patient" />

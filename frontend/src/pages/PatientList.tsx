@@ -36,7 +36,7 @@ export default function PatientList() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-4 pb-20 md:pb-6">
+      <div className="p-4 md:p-6 space-y-4 pb-20 md:pb-6">
 
         <div className="flex items-center justify-between">
           <div>
