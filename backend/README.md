@@ -1,6 +1,6 @@
 # AIMED Backend
 
-FastAPI backend for the AIMED medical consultation recorder. Handles OTP authentication, audio transcription (Sarvam Saaras v3 with speaker diarization), AI-powered SOAP note generation (Gemini 2.5 Flash), structured fact extraction, drug interaction checks, and WhatsApp patient notifications.
+FastAPI backend for the AIMED medical consultation recorder. Handles OTP authentication, audio transcription (Sarvam Saaras v3 with speaker diarization), AI-powered SOAP note generation (Claude 4.6), structured fact extraction, drug interaction checks, and WhatsApp patient notifications.
 
 **Base URL (local dev):** `http://localhost:8000`  
 **Interactive docs:** `http://localhost:8000/docs`  
@@ -279,7 +279,7 @@ Tell the server the audio upload is complete and start the transcription + extra
 4. Poll until complete; parse diarized JSON
 5. Label speakers (doctor vs patient via first-speaker heuristic)
 6. Persist utterances to `utterances` table
-7. Run SOAP extraction (Gemini 2.5 Flash) → `reports` table
+7. Run SOAP extraction (Claude Sonnet 4.6) → `reports` table
 8. Run NER + RxNorm drug interaction checks
 9. Persist structured facts to `facts` table
 10. Update consult status → `in_review`
@@ -492,7 +492,7 @@ Return a 1-hour signed URL for the raw audio file so the frontend can play it an
 
 ### Patients — `/patients`
 
-All patient routes require a valid **doctor** JWT.
+Most patient routes require a valid **doctor** JWT. The `/patients/me/consults` route requires a **patient** JWT.
 
 #### `GET /patients`
 Return all unique patients the doctor has consulted, with last-seen date and total consult count, sorted newest-first.
@@ -562,7 +562,33 @@ Find a patient by their 10-digit mobile number. Tries exact match, then with the
 ```
 - **Errors:** `404` no patient found.
 
-> **Route ordering note:** `/patients/by-phone/{phone}` is registered before `/{patient_id}` to prevent the literal segment "by-phone" being consumed as a UUID.
+> **Route ordering note:** `/patients/by-phone/{phone}` and `/patients/me/consults` are registered before `/{patient_id}` to prevent literal path segments being consumed as UUIDs.
+
+---
+
+#### `GET /patients/me/consults`
+Return all **finalized** consults for the currently authenticated **patient**, including the full SOAP report and the doctor's name. Intended for the patient home dashboard.
+
+- **Auth:** Patient JWT required
+- **Response `200`:** Array of:
+```json
+{
+  "id": "<uuid>",
+  "status": "finalized",
+  "created_at": "2026-05-05T13:00:00Z",
+  "finalized_at": "2026-05-05T14:30:00Z",
+  "doctor_name": "Dr. Priya Verma",
+  "report": {
+    "soap_subjective": "...",
+    "soap_objective": "...",
+    "soap_assessment": "...",
+    "soap_plan": "...",
+    "plain_language_summary": "...",
+    "followup_questions": ["..."],
+    "drug_interactions": []
+  }
+}
+```
 
 ---
 
@@ -578,13 +604,13 @@ backend/
 │   ├── auth.py                    # /auth/* — OTP, profile completion, refresh, me, logout
 │   ├── consults.py                # /consults/* — full consult lifecycle + approve
 │   ├── facts.py                   # /consults/{id}/facts, /facts/{id}, /consults/{id}/audio-url
-│   ├── patients.py                # /patients/* — list, get by id, get by phone
+│   ├── patients.py                # /patients/* — list, get by id, get by phone, patient's own consults
 │   └── reports.py                 # /reports/ — placeholder
 │
 ├── core/
 │   ├── config.py                  # pydantic-settings (reads .env)
 │   ├── auth.py                    # JWT verification dependency
-│   └── llm.py                     # Gemini LLM client wrapper (round-robins API keys)
+│   └── llm.py                     # Anthropic Claude client wrapper
 │
 ├── db/
 │   ├── base.py                    # Supabase client helpers
@@ -600,7 +626,7 @@ backend/
 │   └── report.py                  # Report dataclass
 │
 ├── prompts/
-│   └── SOAP_PROMPT.txt            # System prompt for SOAP extraction (Gemini)
+│   └── SOAP_PROMPT.txt            # System prompt for SOAP extraction (Claude)
 │
 ├── services/
 │   ├── audio_pipeline.py          # ffmpeg transcode + Supabase Storage I/O
@@ -608,7 +634,7 @@ backend/
 │   ├── ner.py                     # Named entity recognition (medications, dosages, etc.)
 │   ├── rxnorm.py                  # RxNorm API drug interaction checks
 │   ├── sarvam_client.py           # Sarvam Saaras v3 job submit/poll/parse
-│   ├── soap.py                    # SOAP note generation via Gemini (orchestrates NER + RxNorm)
+│   ├── soap.py                    # SOAP note generation via Claude (orchestrates NER + RxNorm)
 │   ├── speaker_labeling.py        # Doctor vs patient speaker assignment heuristic
 │   └── whatsapp.py                # Twilio WhatsApp visit summary notifications
 │
@@ -628,9 +654,9 @@ backend/
 | `SUPABASE_DATABASE_URI` | ✅ | Full Postgres connection string (URL-encode special chars) |
 | `JWT_SECRET` | ✅ | Supabase JWT secret for token signature verification |
 | `SARVAM_API_KEY` | ✅ | Sarvam AI subscription key for speech transcription |
-| `GEMINI_API_KEY_1` | ✅ | Gemini API key (primary) for SOAP + fact extraction |
-| `GEMINI_API_KEY_2` | ❌ | Gemini API key (secondary) — round-robined with key 1 for throughput |
-| `ANTHROPIC_API_KEY` | ❌ | Anthropic Claude API key (legacy; Gemini is primary extractor) |
+| `ANTHROPIC_API_KEY` | ✅ | Anthropic Claude API key — used for SOAP extraction and fact generation |
+| `GEMINI_API_KEY_1` | ❌ | Gemini API key (fallback/secondary extractor, if configured) |
+| `GEMINI_API_KEY_2` | ❌ | Gemini API key (tertiary, round-robined with key 1 for throughput) |
 | `TWILIO_ACCOUNT_SID` | ❌ | Twilio account SID for WhatsApp notifications |
 | `TWILIO_AUTH_TOKEN` | ❌ | Twilio auth token |
 | `TWILIO_WHATSAPP_FROM` | ❌ | Twilio WhatsApp sender number, e.g. `+14155238886` |

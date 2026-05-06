@@ -41,6 +41,7 @@ def transcode_to_wav(input_path: str, output_path: str) -> None:
     """
     cmd = [
         "/usr/bin/ffmpeg",
+        #"ffmpeg"
         "-i", input_path,
         "-ac", "1",          # mono
         "-ar", "16000",      # 16 kHz — required by Sarvam

@@ -154,7 +154,7 @@ const result   = await api.post('/consults', { patient_id, idempotency_key });
 ## Pages
 
 ### `/login` — Login
-Phone number entry → OTP verification. After successful verify, routes the user based on `role` from the response.
+Phone number entry → OTP verification. After successful verify, routes the user based on `role` from the response. Includes a testing credentials box at the bottom for quick developer access (e.g., Doctor: 9999999999, Patient: 1111111111). Features the AIMED logo and branding.
 
 ### `/onboarding` — Onboarding
 New users select doctor or patient, fill in their profile (name, clinic for doctors; name, age, blood group for patients), and are routed to their home.
@@ -183,7 +183,7 @@ Both routes render `NewConsult.tsx`, a multi-phase state machine:
 
 | Phase | UI |
 |---|---|
-| `idle` | Phone search to find patient, then "Start recording" |
+| `idle` | Phone search to find patient (automatically prefixes `91` to the 10-digit input), then "Start recording" |
 | `loading` | Spinner (shown when navigating directly to an existing consult URL) |
 | `recording` | Live waveform recorder + stop button |
 | `uploading` | Progress indicator while audio is PUT to Supabase Storage |
@@ -198,7 +198,7 @@ When a finalized consult is loaded, `FinalizedView` is rendered instead — a fu
 **Approve:** the "Approve" button calls `POST /consults/{id}/approve`. Tier-3 (high-risk) facts must all be individually reviewed first or the backend rejects with 409. On success, a WhatsApp summary is sent to the patient.
 
 ### `/patient` — Patient Home
-Patient-facing view of their own consults.
+Patient-facing view of their own finalized consults, fetched via `GET /patients/me/consults`. Displays consult cards with the doctor's name, date, and a visit summary snippet. Clicking a card opens a `Dialog` modal that reveals the full clinical picture exactly as the doctor sees it (Subjective, Objective, Assessment, Plan, Follow-up Questions, and Patient-friendly summary).
 
 ### `/patient/shares` — Patient Shares
 Consults shared with the patient via a share token.
@@ -220,7 +220,7 @@ Structured facts extracted by the AI, grouped by risk tier. Each card shows the 
 Animated multi-step progress indicator that maps backend `status` values to human-readable steps. Polls `GET /consults/{id}/status` every 3 seconds.
 
 ### `NavBar`
-Top bar across all authenticated views. User avatar opens a dropdown (click-outside to close) showing the signed-in name and a Log out button. Logout calls `POST /auth/logout`, clears localStorage, and redirects to `/login`.
+Top bar across all authenticated views. Displays the AIMED logo and name. User avatar opens a dropdown (click-outside to close) showing the signed-in name and a Log out button. Logout calls `POST /auth/logout`, clears localStorage, and redirects to `/login`.
 
 ### `StatusBadge`
 Coloured pill that maps `ConsultStatus` → label + colour:
