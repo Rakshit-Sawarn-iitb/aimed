@@ -1,6 +1,6 @@
 # AIMED Backend
 
-FastAPI backend for the AIMED medical consultation recorder. Handles OTP authentication, audio transcription (Sarvam Saaras v3 with speaker diarization), AI-powered SOAP note generation (Gemini 2.5 Flash), structured fact extraction, drug interaction checks, and WhatsApp patient notifications.
+FastAPI backend for the AIMED medical consultation recorder. Handles OTP authentication, audio transcription (Sarvam Saaras v3 with speaker diarization), AI-powered SOAP note generation (Claude 4.6), structured fact extraction, drug interaction checks, and WhatsApp patient notifications.
 
 **Base URL (local dev):** `http://localhost:8000`  
 **Interactive docs:** `http://localhost:8000/docs`  
