@@ -42,4 +42,4 @@ Three tiers of extracted facts, with one unforgiving rule:
 * **Lazy review is visible:** The audit summary tells the patient exactly how many audio anchors the doctor actually played. Trust pressure flows back to the doctor.
 
 ---
-Built with ❤️ for the healthcare hackathon. Opinionated, audit-grade, deliberately narrow.
+Built with ❤️ by Devendra Computers (Kanika, Rakshit, Sajjad and Vaibhav) for the AICxClaude hackathon. 
