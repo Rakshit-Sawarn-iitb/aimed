@@ -28,3 +28,6 @@ def get_current_user(
 
 def get_current_doctor_id(user: dict = Depends(get_current_user)) -> str:
     return user["sub"]  # Supabase user UUID = your doctor.id
+
+def get_current_patient_id(user: dict = Depends(get_current_user)) -> str:
+    return user["sub"]  # Supabase user UUID = your patient.id

@@ -6,7 +6,7 @@ api/patients.py
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from core.auth import get_current_doctor_id
+from core.auth import get_current_doctor_id, get_current_patient_id
 from db.session import get_supabase_admin
 
 router = APIRouter(prefix="/patients", tags=["patients"])
@@ -61,6 +61,77 @@ async def list_patients(doctor_id: str = Depends(get_current_doctor_id)):
 
     result.sort(key=lambda x: x["last_seen"] or "", reverse=True)
     return result
+
+
+@router.get("/me/consults")
+async def get_my_consults(patient_id: str = Depends(get_current_patient_id)):
+    """
+    Return all finalized consults for the currently authenticated patient,
+    including the SOAP report summary and the doctor's name.
+    """
+    supabase = get_supabase_admin()
+
+    consults_res = (
+        supabase.table("consults")
+        .select("id, status, created_at, finalized_at, doctor_id")
+        .eq("patient_id", patient_id)
+        .eq("status", "finalized")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    consults = consults_res.data or []
+
+    if not consults:
+        return []
+
+    # Batch-fetch doctor names
+    doctor_ids = list({c["doctor_id"] for c in consults})
+    doctor_names: dict[str, str] = {}
+    if doctor_ids:
+        docs = supabase.table("doctors").select("id, name").in_("id", doctor_ids).execute()
+        doctor_names = {d["id"]: d["name"] for d in (docs.data or [])}
+
+    # Batch-fetch SOAP reports
+    finalized_ids = [c["id"] for c in consults]
+    reports_map: dict[str, dict] = {}
+    if finalized_ids:
+        reports_res = (
+            supabase.table("reports")
+            .select(
+                "consult_id, soap_subjective, soap_objective, "
+                "soap_assessment, soap_plan, plain_language_summary, "
+                "followup_questions, drug_interactions"
+            )
+            .in_("consult_id", finalized_ids)
+            .execute()
+        )
+        for r in (reports_res.data or []):
+            reports_map[r["consult_id"]] = r
+
+    consult_list = []
+    for c in consults:
+        entry: dict = {
+            "id":           c["id"],
+            "status":       c["status"],
+            "created_at":   c["created_at"],
+            "finalized_at": c.get("finalized_at"),
+            "doctor_name":  doctor_names.get(c["doctor_id"]) or "Unknown Doctor",
+        }
+        if c["id"] in reports_map:
+            r = reports_map[c["id"]]
+            entry["report"] = {
+                "soap_subjective":        r.get("soap_subjective") or "",
+                "soap_objective":         r.get("soap_objective") or "",
+                "soap_assessment":        r.get("soap_assessment") or "",
+                "soap_plan":              r.get("soap_plan") or "",
+                "plain_language_summary": r.get("plain_language_summary"),
+                "followup_questions":     r.get("followup_questions") or [],
+                "drug_interactions":      r.get("drug_interactions") or [],
+            }
+        consult_list.append(entry)
+
+    return consult_list
+
 
 
 @router.get("/{patient_id}")
