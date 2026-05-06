@@ -139,6 +139,7 @@ class ConsultListItem(BaseModel):
     """Lightweight consult summary for the dashboard list."""
     id: str
     patient_id: str
+    patient_name: Optional[str] = None
     status: ConsultStatusLiteral
     started_at: Optional[datetime] = None
     finalized_at: Optional[datetime] = None

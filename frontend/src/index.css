@@ -148,4 +148,57 @@
   .animate-pulse-dot {
     animation: pulse-dot 1.2s ease-in-out infinite;
   }
+
+  /* Landing page utilities */
+  .text-gradient-teal {
+    background: linear-gradient(120deg,
+      hsl(174 84% 22%) 0%,
+      hsl(174 84% 35%) 35%,
+      hsl(160 84% 45%) 65%,
+      hsl(174 84% 25%) 100%);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: gradient-pan 8s ease infinite;
+  }
+
+  .bg-grid {
+    background-image:
+      linear-gradient(to right,  hsla(174, 30%, 50%, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, hsla(174, 30%, 50%, 0.06) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .bg-grid-fade {
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 30%, transparent 70%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 30%, transparent 70%);
+  }
+
+  .anim-delay-100 { animation-delay: 0.1s; }
+  .anim-delay-200 { animation-delay: 0.2s; }
+  .anim-delay-300 { animation-delay: 0.3s; }
+  .anim-delay-400 { animation-delay: 0.4s; }
+  .anim-delay-500 { animation-delay: 0.5s; }
+  .anim-delay-700 { animation-delay: 0.7s; }
+  .anim-delay-1000 { animation-delay: 1s; }
+}
+
+@layer utilities {
+  .glass {
+    background: hsla(0, 0%, 100%, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid hsla(174, 30%, 80%, 0.4);
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+  }
+  .reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Recorder } from '@/components/consult/Recorder';
@@ -7,13 +7,15 @@ import { ProcessingStepper } from '@/components/consult/ProcessingStepper';
 import { TranscriptViewer } from '@/components/consult/TranscriptViewer';
 import { FactPanel } from '@/components/consult/FactPanel';
 import { ReviewBottomBar } from '@/components/consult/ReviewBottomBar';
+import { FinalizedView } from '@/components/consult/FinalizedView';
+import type { ReportData } from '@/components/consult/FinalizedView';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useFactReview } from '@/hooks/useFactReview';
 import { useMe, profileName } from '@/hooks/useMe';
 import { api, ApiError } from '@/lib/api';
 import type { Fact, RiskTier, FactCategory, FactStatus, Utterance } from '@/types';
 
-type Phase = 'idle' | 'recording' | 'uploading' | 'processing' | 'review' | 'failed';
+type Phase = 'idle' | 'loading' | 'recording' | 'uploading' | 'processing' | 'review' | 'failed';
 
 interface CreateResponse {
   consult_id: string;
@@ -30,6 +32,8 @@ interface StatusResponse {
 interface ConsultDetail {
   id: string;
   status: string;
+  patient_id?: string;
+  finalized_at?: string;
   utterances: Array<{
     idx: number;
     speaker_id: string;
@@ -39,6 +43,7 @@ interface ConsultDetail {
     end_sec: number;
   }>;
   speaker_map?: { doctor_speaker_id: string; patient_speaker_id: string };
+  report?: ReportData;
 }
 
 interface FactApiResponse {
@@ -92,16 +97,23 @@ function mapFact(f: FactApiResponse, consultId: string): Fact {
 
 export default function NewConsult() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { consultId: routeConsultId } = useParams();
   const [searchParams] = useSearchParams();
+  const statePatientName = (location.state as { patientName?: string } | null)?.patientName ?? null;
   const queryPatientId = searchParams.get('patientId') ?? '';
 
   const recorder = useAudioRecorder();
   const { me } = useMe();
   const doctorName = profileName(me) ? `Dr. ${profileName(me)}` : 'You';
 
-  const [phase, setPhase] = useState<Phase>('idle');
+  // If we're opening an existing consult, start in 'loading' so the idle
+  // phone-search screen never flashes before the useEffect fires.
+  const [phase, setPhase] = useState<Phase>(routeConsultId ? 'loading' : 'idle');
   const [patientId, setPatientId] = useState(queryPatientId);
+  const [patientName, setPatientName] = useState<string | null>(null);
+  const [phoneInput, setPhoneInput] = useState('');
+  const [phoneSearchState, setPhoneSearchState] = useState<'idle' | 'searching' | 'found' | 'not_found'>('idle');
   const [consultId, setConsultId] = useState<string | null>(routeConsultId ?? null);
   const [statusText, setStatusText] = useState<string>('');
   const [stepIdx, setStepIdx] = useState(0);
@@ -195,6 +207,23 @@ export default function NewConsult() {
     }, 3000);
   }, [loadReviewData]);
 
+  const handlePhoneSearch = useCallback(async () => {
+    const digits = phoneInput.replace(/\D/g, '');
+    if (digits.length < 10) {
+      toast.error('Enter a valid 10-digit mobile number');
+      return;
+    }
+    setPhoneSearchState('searching');
+    try {
+      const patient = await api.get<{ id: string; name: string }>(`/patients/by-phone/${digits}`);
+      setPatientId(patient.id);
+      setPatientName(patient.name);
+      setPhoneSearchState('found');
+    } catch {
+      setPhoneSearchState('not_found');
+    }
+  }, [phoneInput]);
+
   const handleStartRecording = useCallback(async () => {
     if (!patientId.trim()) {
       toast.error('Enter a patient id to start');
@@ -274,28 +303,66 @@ export default function NewConsult() {
 
   // ── Phases ──────────────────────────────────────────────────────────────
 
+  if (phase === 'loading') {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   if (phase === 'idle') {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-6 max-w-md mx-auto">
-        <div className="w-full bg-card border border-border rounded-xl p-6 space-y-4">
-          <div>
-            <h1 className="text-lg font-medium">New consult</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Patient roster API isn't built yet — paste a patient user id (UUID) to record against.
-            </p>
+      <div className="flex-1 flex flex-col items-center justify-center p-6 max-w-md mx-auto w-full">
+        <div className="w-full bg-card border border-border rounded-xl p-6 space-y-5">
+          <h1 className="text-lg font-medium">New consult</h1>
+
+          {/* Phone search */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Patient mobile number</label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">+91</span>
+                <input
+                  className="w-full h-11 pl-10 pr-3 rounded-md border border-input bg-background text-sm"
+                  placeholder="98765 43210"
+                  value={phoneInput}
+                  maxLength={10}
+                  inputMode="numeric"
+                  onChange={e => {
+                    setPhoneInput(e.target.value.replace(/\D/g, ''));
+                    setPhoneSearchState('idle');
+                    setPatientId('');
+                    setPatientName(null);
+                  }}
+                  onKeyDown={e => e.key === 'Enter' && handlePhoneSearch()}
+                />
+              </div>
+              <Button
+                variant="outline"
+                className="h-11 px-4 shrink-0"
+                disabled={phoneInput.length < 10 || phoneSearchState === 'searching'}
+                onClick={handlePhoneSearch}
+              >
+                {phoneSearchState === 'searching' ? 'Searching…' : 'Find'}
+              </Button>
+            </div>
+
+            {/* Result states */}
+            {phoneSearchState === 'found' && patientName && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-success/10 border border-success/20">
+                <span className="text-success text-sm">✓</span>
+                <span className="text-sm font-medium">{patientName}</span>
+              </div>
+            )}
+            {phoneSearchState === 'not_found' && (
+              <p className="text-sm text-danger">No patient found with this number.</p>
+            )}
           </div>
-          <div>
-            <label className="text-sm font-medium">Patient id</label>
-            <input
-              className="mt-1.5 w-full h-11 px-3 rounded-md border border-input bg-background text-sm font-mono"
-              placeholder="00000000-0000-0000-0000-000000000000"
-              value={patientId}
-              onChange={e => setPatientId(e.target.value)}
-            />
-          </div>
+
           <Button
             className="w-full min-h-[44px]"
-            disabled={!patientId.trim()}
+            disabled={phoneSearchState !== 'found' || !patientId}
             onClick={handleStartRecording}
           >
             Open recorder
@@ -312,7 +379,7 @@ export default function NewConsult() {
           isRecording
           isPaused={recorder.isPaused}
           durationSec={recorder.durationSec}
-          patientName={`Patient ${patientId.slice(0, 8)}…`}
+          patientName={patientName ?? `Patient ${patientId.slice(0, 8)}…`}
           onStart={handleStartRecording}
           onStop={handleStopRecording}
           onPause={recorder.pauseRecording}
@@ -343,6 +410,17 @@ export default function NewConsult() {
           <Button onClick={() => { setPhase('idle'); setErrorMsg(null); }}>Try again</Button>
         </div>
       </div>
+    );
+  }
+
+  // Finalized — read-only SOAP view
+  if (detail?.status === 'finalized' && detail.report) {
+    return (
+      <FinalizedView
+        report={detail.report}
+        patientName={patientName ?? statePatientName}
+        finalizedAt={detail.finalized_at}
+      />
     );
   }
 

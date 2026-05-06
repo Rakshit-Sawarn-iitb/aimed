@@ -40,6 +40,8 @@ def get_drug_class(drug_name: str) -> str | None:
     Falls back to _CLASS_ALIASES for when the allergen is already a class name.
     Silently returns None on any network/API error (fail-open is safer than false positives).
     """
+    if not drug_name:
+    	return None
     name_lower = drug_name.lower().strip()
     if name_lower in _CLASS_ALIASES:
         return _CLASS_ALIASES[name_lower]

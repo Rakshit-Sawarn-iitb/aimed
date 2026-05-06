@@ -127,6 +127,12 @@ export default function Login() {
         <p className="text-center text-xs text-muted-foreground mt-6 max-w-xs mx-auto">
           By continuing you agree to our terms. Your data is yours — see our privacy policy.
         </p>
+        
+        <div className="mt-8 bg-primary/5 border border-primary/10 rounded-md p-3 text-xs text-center text-muted-foreground max-w-xs mx-auto">
+          <strong>Testing Credentials:</strong><br />
+          Doctor: <code>99999 99999</code> (OTP: <code>676767</code>)<br />
+          Patient: <code>11111 11111</code> (OTP: <code>676767</code>)
+        </div>
       </div>
     </div>
   );

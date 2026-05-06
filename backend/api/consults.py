@@ -36,6 +36,7 @@ from models.consult import (
     ReportOut,
 )
 from services.soap import structure_soap
+from services.whatsapp import send_visit_summary
 from workers.transcription_worker import run_transcription_pipeline
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,19 @@ async def list_consults(doctor_id: str = Depends(get_current_doctor_id)):
         .order("created_at", desc=True)
         .execute()
     )
-    return [ConsultListItem(**row) for row in (res.data or [])]
+    rows = res.data or []
+
+    # Batch-fetch patient names in one query
+    patient_ids = list({r["patient_id"] for r in rows})
+    patient_names: dict[str, str] = {}
+    if patient_ids:
+        pats = supabase.table("patients").select("id, name").in_("id", patient_ids).execute()
+        patient_names = {p["id"]: p["name"] for p in (pats.data or [])}
+
+    return [
+        ConsultListItem(**row, patient_name=patient_names.get(row["patient_id"]))
+        for row in rows
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -437,12 +450,63 @@ async def update_speaker_labels(
 
 
 # ---------------------------------------------------------------------------
+# WhatsApp helper (fire-and-forget background task)
+# ---------------------------------------------------------------------------
+
+def _notify_patient_whatsapp(consult_id: str, patient_id: str) -> None:
+    """Fetch patient + report, then send WhatsApp summary. Runs in a background thread."""
+    supabase = get_supabase_admin()
+    try:
+        patient = (
+            supabase.table("patients")
+            .select("name, phone")
+            .eq("id", patient_id)
+            .single()
+            .execute()
+            .data
+        )
+        if not patient or not patient.get("phone"):
+            logger.warning("[WhatsApp] No phone for patient %s — skipping", patient_id)
+            return
+
+        report = (
+            supabase.table("reports")
+            .select("soap_subjective, soap_plan, plain_language_summary, drug_interactions, followup_questions")
+            .eq("consult_id", consult_id)
+            .single()
+            .execute()
+            .data
+        )
+        if not report:
+            logger.warning("[WhatsApp] No report for consult %s — skipping", consult_id)
+            return
+
+        # Supabase stores phone in E.164 (+917217786772); strip to 10-digit
+        raw = patient["phone"].lstrip("+")
+        phone = raw[2:] if raw.startswith("91") and len(raw) == 12 else raw
+
+        sent = send_visit_summary(
+            patient_phone=phone,
+            patient_name=patient.get("name", "Patient"),
+            report=report,
+        )
+        if sent:
+            logger.info("[WhatsApp] Summary sent for consult %s → patient %s", consult_id, patient_id)
+        else:
+            logger.warning("[WhatsApp] Send failed for consult %s", consult_id)
+
+    except Exception:
+        logger.exception("[WhatsApp] Background task failed for consult %s", consult_id)
+
+
+# ---------------------------------------------------------------------------
 # POST /consults/{id}/approve
 # ---------------------------------------------------------------------------
 
 @router.post("/{consult_id}/approve", status_code=200)
 async def approve_consult(
     consult_id: str,
+    background_tasks: BackgroundTasks,
     doctor_id: str = Depends(get_current_doctor_id),
 ):
     """
@@ -454,7 +518,7 @@ async def approve_consult(
 
     result = (
         supabase.table("consults")
-        .select("id, doctor_id, status")
+        .select("id, doctor_id, patient_id, status")
         .eq("id", consult_id)
         .single()
         .execute()
@@ -468,6 +532,8 @@ async def approve_consult(
             status_code=409,
             detail=f"Only consults in 'in_review' can be approved. Current status: '{result.data['status']}'.",
         )
+
+    patient_id = result.data["patient_id"]
 
     # Block approval if any Tier-3 fact is still pending
     tier3_pending = (
@@ -494,6 +560,8 @@ async def approve_consult(
     supabase.table("reports").update({
         "approved_at": now,
     }).eq("consult_id", consult_id).execute()
+
+    background_tasks.add_task(_notify_patient_whatsapp, consult_id, patient_id)
 
     logger.info("Consult %s approved and finalized by doctor %s", consult_id, doctor_id)
     return {

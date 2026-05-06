@@ -15,6 +15,8 @@ export default {
     extend: {
       fontFamily: {
         sans: ["Manrope", "system-ui", "sans-serif"],
+        display: ["'Playfair Display'", "ui-serif", "Georgia", "serif"],
+        mono: ["'JetBrains Mono'", "ui-monospace", "monospace"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -93,10 +95,51 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "fade-up": {
+          from: { opacity: "0", transform: "translateY(20px)" },
+          to:   { opacity: "1", transform: "translateY(0)" },
+        },
+        "fade-in": {
+          from: { opacity: "0" },
+          to:   { opacity: "1" },
+        },
+        "float": {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%":      { transform: "translateY(-12px)" },
+        },
+        "blob": {
+          "0%, 100%": { transform: "translate(0px, 0px) scale(1)" },
+          "33%":      { transform: "translate(30px, -50px) scale(1.1)" },
+          "66%":      { transform: "translate(-20px, 20px) scale(0.9)" },
+        },
+        "shimmer": {
+          "0%":   { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "pulse-ring": {
+          "0%":   { transform: "scale(0.8)", opacity: "0.7" },
+          "100%": { transform: "scale(2)",   opacity: "0" },
+        },
+        "gradient-pan": {
+          "0%, 100%": { backgroundPosition: "0% 50%" },
+          "50%":      { backgroundPosition: "100% 50%" },
+        },
+        "marquee": {
+          from: { transform: "translateX(0)" },
+          to:   { transform: "translateX(-50%)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
+        "accordion-up":   "accordion-up 0.2s ease-out",
+        "fade-up":        "fade-up 0.7s ease-out both",
+        "fade-in":        "fade-in 0.8s ease-out both",
+        "float":          "float 6s ease-in-out infinite",
+        "blob":           "blob 14s ease-in-out infinite",
+        "shimmer":        "shimmer 2.5s linear infinite",
+        "pulse-ring":     "pulse-ring 2s cubic-bezier(0.4,0,0.6,1) infinite",
+        "gradient-pan":   "gradient-pan 8s ease infinite",
+        "marquee":        "marquee 30s linear infinite",
       },
     },
   },
