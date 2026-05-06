@@ -56,9 +56,7 @@ function TopNav() {
         <Link to="/" className="flex items-center gap-2 group">
           <div className="relative">
             <div className="absolute inset-0 rounded-md bg-primary/20 blur-md group-hover:bg-primary/40 transition-colors" />
-            <div className="relative h-8 w-8 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-display font-bold">
-              A
-            </div>
+            <img src="/aimed-logo.jpeg" alt="AIMED Logo" className="relative h-8 w-8 rounded-md object-cover" />
           </div>
           <span className="font-display text-xl font-semibold tracking-tight">AIMED</span>
         </Link>
@@ -607,7 +605,7 @@ function Footer() {
     <footer className="border-t border-border mt-12">
       <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
         <div className="flex items-center gap-2">
-          <div className="h-6 w-6 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-display font-bold text-xs">A</div>
+          <img src="/aimed-logo.jpeg" alt="AIMED Logo" className="h-6 w-6 rounded-md object-cover" />
           <span className="font-display font-semibold">AIMED</span>
         </div>
         <div className="text-xs flex items-center gap-1.5">
