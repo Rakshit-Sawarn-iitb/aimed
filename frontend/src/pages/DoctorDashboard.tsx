@@ -97,10 +97,12 @@ export default function DoctorDashboard() {
   }, [selectedDay]);
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="p-4 md:p-6 space-y-4 pb-20 md:pb-6">
+    <div className="flex-1 flex flex-col overflow-hidden">
 
-        {/* Header */}
+      {/* ── Fixed header (date + calendar + tabs) ───────────────────────── */}
+      <div className="shrink-0 px-4 md:px-6 pt-4 md:pt-6 space-y-4">
+
+        {/* Date + New consult */}
         <div className="flex items-center justify-between">
           <div>
             <h1>{format(TODAY, 'EEEE, MMM d')}</h1>
@@ -116,7 +118,6 @@ export default function DoctorDashboard() {
 
         {/* Week calendar strip */}
         <div className="bg-card border border-border rounded-xl p-3">
-          {/* Week navigation */}
           <div className="flex items-center justify-between mb-2 px-1">
             <span className="text-xs font-semibold text-muted-foreground">
               {format(weekDays[0], 'MMM d')} – {format(weekDays[6], 'MMM d, yyyy')}
@@ -146,7 +147,6 @@ export default function DoctorDashboard() {
             </div>
           </div>
 
-          {/* Day pills */}
           <div className="flex gap-1">
             {weekDays.map(day => {
               const key = format(day, 'yyyy-MM-dd');
@@ -177,7 +177,6 @@ export default function DoctorDashboard() {
                   <span className="text-sm font-bold leading-none mt-0.5">
                     {format(day, 'd')}
                   </span>
-                  {/* Consult count dot */}
                   <div className="h-4 flex items-center justify-center mt-0.5">
                     {dayCount > 0 ? (
                       <span className={cn(
@@ -231,16 +230,18 @@ export default function DoctorDashboard() {
             })}
           </div>
         )}
+      </div>
 
-        {/* Consult list */}
+      {/* ── Scrollable consult list ──────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 pb-20 md:pb-6">
         {loading ? (
-          <div className="space-y-3">
+          <div className="space-y-3 pt-4">
             {[1, 2, 3].map(i => (
               <div key={i} className="h-16 rounded-lg bg-muted animate-pulse" />
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-12 border border-dashed border-border rounded-lg">
+          <div className="text-center py-12 border border-dashed border-border rounded-lg mt-4">
             <p className="text-sm text-muted-foreground">
               {dayFiltered.length === 0
                 ? `No consults on ${selectedDayLabel.toLowerCase()}.`
@@ -253,43 +254,41 @@ export default function DoctorDashboard() {
             )}
           </div>
         ) : (
-          <>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-1">
+          <div className="space-y-2 pt-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-1 pb-1">
               {selectedDayLabel}
             </p>
-            <div className="space-y-2">
-              {filtered.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => navigate(`/doctor/consult/${c.id}`, {
-                    state: { patientName: c.patient_name },
-                  })}
-                  className={cn(
-                    'w-full text-left bg-card border border-border rounded-lg px-4 py-3',
-                    'hover:bg-secondary/50 transition-colors flex items-center justify-between gap-4',
-                    TILE_BORDER[c.status]
-                  )}
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {c.patient_name ?? (
-                        <span className="font-mono text-muted-foreground">
-                          {c.patient_id.slice(0, 8)}…
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {c.created_at ? format(parseISO(c.created_at), 'h:mm a') : '—'}
-                    </p>
-                  </div>
-                  <StatusBadge status={c.status as ConsultStatus} />
-                </button>
-              ))}
-            </div>
-          </>
+            {filtered.map(c => (
+              <button
+                key={c.id}
+                onClick={() => navigate(`/doctor/consult/${c.id}`, {
+                  state: { patientName: c.patient_name },
+                })}
+                className={cn(
+                  'w-full text-left bg-card border border-border rounded-lg px-4 py-3',
+                  'hover:bg-secondary/50 transition-colors flex items-center justify-between gap-4',
+                  TILE_BORDER[c.status]
+                )}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {c.patient_name ?? (
+                      <span className="font-mono text-muted-foreground">
+                        {c.patient_id.slice(0, 8)}…
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {c.created_at ? format(parseISO(c.created_at), 'h:mm a') : '—'}
+                  </p>
+                </div>
+                <StatusBadge status={c.status as ConsultStatus} />
+              </button>
+            ))}
+          </div>
         )}
-
       </div>
+
     </div>
   );
 }
