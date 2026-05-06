@@ -215,7 +215,8 @@ export default function NewConsult() {
     }
     setPhoneSearchState('searching');
     try {
-      const patient = await api.get<{ id: string; name: string }>(`/patients/by-phone/${digits}`);
+      const searchPhone = `91${digits}`;
+      const patient = await api.get<{ id: string; name: string }>(`/patients/by-phone/${searchPhone}`);
       setPatientId(patient.id);
       setPatientName(patient.name);
       setPhoneSearchState('found');
