@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Mic, Brain, ShieldCheck, Languages, Share2, Activity,
-  AlertTriangle, FileText, Stethoscope, Lock, Sparkles, ArrowRight,
+  AlertTriangle, FileText, Stethoscope, Lock, ArrowRight,
   PlayCircle, FileSearch, Users, Heart,
 } from 'lucide-react';
 
@@ -100,11 +100,6 @@ function Hero() {
 
         {/* Left: copy */}
         <div className="md:col-span-7 space-y-7 text-center md:text-left">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium animate-fade-in">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>AIC × Anthropic Hackathon · Track 1 — Biology &amp; Physical Health</span>
-          </div>
-
           <h1 className="font-display font-bold text-5xl md:text-7xl leading-[1.05] tracking-tight animate-fade-up">
             <span className="block">The doctor</span>
             <span className="block">writes nothing.</span>
@@ -614,11 +609,9 @@ function Footer() {
         <div className="flex items-center gap-2">
           <div className="h-6 w-6 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-display font-bold text-xs">A</div>
           <span className="font-display font-semibold">AIMED</span>
-          <span className="text-xs">·</span>
-          <span className="text-xs">AIC × Anthropic Hackathon · 2026</span>
         </div>
-        <div className="text-xs">
-          Built with Claude · Sarvam · Supabase. <em>Designed to fail closed.</em>
+        <div className="text-xs flex items-center gap-1.5">
+          Built with <span className="text-red-500" aria-label="love">❤</span>
         </div>
       </div>
     </footer>
