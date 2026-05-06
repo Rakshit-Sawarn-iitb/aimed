@@ -567,28 +567,29 @@ function CtaSection() {
   return (
     <Section className="py-24 px-6">
       <div className="max-w-4xl mx-auto relative">
-        <div aria-hidden className="absolute -inset-6 bg-gradient-to-tr from-primary/30 via-emerald-300/30 to-transparent blur-3xl rounded-3xl" />
-        <div className="relative bg-foreground text-background rounded-3xl p-10 md:p-16 text-center overflow-hidden">
-          <div aria-hidden className="absolute inset-0 bg-grid opacity-10" />
+        <div aria-hidden className="absolute -inset-6 bg-gradient-to-tr from-primary/20 via-emerald-200/30 to-transparent blur-3xl rounded-3xl" />
+        <div className="relative bg-card border border-primary/20 rounded-3xl p-10 md:p-16 text-center overflow-hidden">
+          <div aria-hidden className="absolute inset-0 bg-grid opacity-30" />
+          <div aria-hidden className="absolute -top-32 left-1/2 -translate-x-1/2 h-72 w-[40rem] rounded-full bg-primary/15 blur-3xl" />
           <div className="relative">
             <h2 className="font-display text-4xl md:text-5xl font-semibold leading-tight">
-              Try it on a 60-second consult.
+              Try it on a <span className="italic text-primary">60-second</span> consult.
             </h2>
-            <p className="mt-4 text-background/70 max-w-xl mx-auto">
-              Phone OTP · doctor or patient · works from any browser. Opinionated, audit-grade,
-              deliberately narrow.
+            <p className="mt-4 text-muted-foreground max-w-xl mx-auto">
+              Sign in with your phone. Record a short consult in your own voice.
+              Watch Claude extract a structured record you can actually trust.
             </p>
             <div className="mt-8 flex flex-wrap gap-3 justify-center">
               <Link
                 to="/login"
-                className="inline-flex items-center gap-2 h-12 px-7 rounded-full bg-primary text-primary-foreground font-medium hover:scale-[1.02] transition-transform"
+                className="inline-flex items-center gap-2 h-12 px-7 rounded-full bg-primary text-primary-foreground font-medium hover:scale-[1.02] hover:shadow-lg hover:shadow-primary/30 transition-all"
               >
                 Open the app <ArrowRight className="h-4 w-4" />
               </Link>
               <a
                 href="https://github.com/Rakshit-Sawarn-iitb/aimed"
                 target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-2 h-12 px-7 rounded-full border border-background/30 hover:bg-background/10 font-medium transition-colors"
+                className="inline-flex items-center gap-2 h-12 px-7 rounded-full border border-border bg-background hover:bg-secondary font-medium transition-colors"
               >
                 View source
               </a>
