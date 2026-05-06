@@ -1,9 +1,11 @@
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
 from gotrue.errors import AuthApiError
 from postgrest.exceptions import APIError
 
+from core.config import settings
 from db.session import get_supabase, get_supabase_admin
 from core.auth import get_current_user
 
@@ -19,6 +21,10 @@ class OtpStartRequest(BaseModel):
 class OtpVerifyRequest(BaseModel):
     phone: str
     token: str = Field(..., min_length=4, max_length=10)
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 class DoctorProfileRequest(BaseModel):
@@ -192,6 +198,30 @@ async def me(user: dict = Depends(get_current_user)):
         "role": role,
         "is_new": role is None,
         "profile": profile,
+    }
+
+
+@router.post("/refresh")
+async def refresh_session(body: RefreshRequest):
+    """
+    Exchange a Supabase refresh token for a new access + refresh token pair.
+    Calls the GoTrue endpoint directly so behaviour is supabase-py-version-independent.
+    """
+    res = httpx.post(
+        f"{settings.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token",
+        headers={
+            "apikey": settings.SUPABASE_ANON_KEY,
+            "Content-Type": "application/json",
+        },
+        json={"refresh_token": body.refresh_token},
+        timeout=10.0,
+    )
+    if not res.is_success:
+        raise HTTPException(status_code=401, detail="Refresh token invalid or expired. Please log in again.")
+    data = res.json()
+    return {
+        "access_token": data["access_token"],
+        "refresh_token": data["refresh_token"],
     }
 
 
