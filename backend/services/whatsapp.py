@@ -11,7 +11,7 @@ def send_visit_summary(patient_phone: str, patient_name: str, report: dict) -> b
     
     # Format the message
     drug_warning = ""
-    if report.get("drug_interactions"):
+    if report.get("drug_interactions") and len(report["drug_interactions"]) > 0:
         drug_warning = "\n⚠️ *Important:* Your doctor has been alerted about a potential medication interaction. Please follow their guidance carefully.\n"
 
     followups = report.get("followup_questions", [])
@@ -55,7 +55,7 @@ if __name__ == "__main__":
         "soap_subjective": "I have a headache and fever.",
         "soap_plan": "Take paracetamol 500mg twice daily for 5 days.",
         "plain_language_summary": "You have a headache and fever. Take paracetamol as prescribed.",
-        "drug_interactions": True,
+        "drug_interactions": ["Paracetamol may interact with other medications."],
         "followup_questions": ["Monitor your temperature", "Stay hydrated", "Rest well"]
     }
     send_visit_summary("7217786772", "Rakshit Sawarn", test_report)

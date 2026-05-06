@@ -62,6 +62,7 @@ export interface Consult {
 export interface ConsultListItem {
   id: string;
   patient_id: string;
+  patient_name?: string;
   status: ConsultStatus;
   started_at?: string;
   finalized_at?: string;
